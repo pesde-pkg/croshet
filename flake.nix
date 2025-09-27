@@ -45,9 +45,7 @@
         commonCraneArgs = {
           src = craneLib.cleanCargoSource ./.;
           strictDeps = true;
-          # nativeBuildInputs = with pkgs; [
-          #   pkg-config
-          # ];
+          nativeBuildInputs = [ pkgs.deno ];
         };
 
         # Build dependencies separately to have them cached in nix store
@@ -92,6 +90,7 @@
           checks = self.checks.${system};
           packages = with pkgs; [
             git
+            deno
             nixfmt-tree
           ];
 
