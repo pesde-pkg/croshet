@@ -7,6 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::string::FromUtf8Error;
+use std::thread::current;
 
 use futures::FutureExt;
 use futures::future;
@@ -29,6 +30,7 @@ use crate::parser::RedirectOpOutput;
 use crate::parser::Sequence;
 use crate::parser::SequentialList;
 use crate::parser::SimpleCommand;
+use crate::parser::SpecialParameter;
 use crate::parser::Word;
 use crate::parser::WordPart;
 use crate::shell::commands::ShellCommand;
@@ -57,19 +59,21 @@ use super::types::TreeExitCodeCell;
 /// * `list` - A `SequentialList` of commands to execute.
 /// * `env_vars` - A map of environment variables which are set in the shell.
 /// * `cwd` - The current working directory.
-/// * `custom_commands` - A map of custom shell commands and there ShellCommand implementation.
+/// * `custom_commands` - A map of custom shell commands and their ShellCommand implementation.
 /// * `kill_signal` - Use to send signals to spawned executables.
 ///
 /// # Returns
 /// The exit code of the command execution.
 pub async fn execute(
   list: SequentialList,
+  args: Vec<OsString>,
   env_vars: HashMap<OsString, OsString>,
   cwd: PathBuf,
   custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
   kill_signal: KillSignal,
 ) -> i32 {
-  let state = ShellState::new(env_vars, cwd, custom_commands, kill_signal);
+  let state =
+    ShellState::new(args, env_vars, cwd, custom_commands, kill_signal);
   execute_with_pipes(
     list,
     state,
@@ -934,6 +938,30 @@ fn evaluate_word_parts(
 
             current_text.push(TextPart::Quoted(text));
             continue;
+          }
+          WordPart::SpecialParameters(SpecialParameter::GeneralExpansion) => {
+            // Expand `$@` to `$1, ..., $[n]`
+
+            // NOTE: for now, regardless of whether `$@` is quoted, we behave as if it were
+            // change in future! we are provided is_quoted for this!
+            for position in 1..state.positional_param_len() + 1 {
+              let part = if is_quoted {
+                TextPart::Quoted
+              } else {
+                TextPart::Text
+              };
+              let expanded_var = state
+                .get_var(OsString::from(position.to_string()).as_os_str())
+                .expect("unreachable: `$@` should not try to expand into an undefined positional")
+                .clone();
+
+              // FIXME: this entire thing becomes a singular word. we want them to be different words
+              current_text.push(part(expanded_var));
+              current_text.push(TextPart::Text(" ".into()));
+            }
+
+            current_text.pop();
+            continue; // do we return or continue???
           }
         };
 

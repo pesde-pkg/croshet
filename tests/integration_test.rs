@@ -15,6 +15,16 @@ mod test_builder;
 const FOLDER_SEPERATOR: char = if cfg!(windows) { '\\' } else { '/' };
 
 #[tokio::test]
+async fn meow() {
+  TestBuilder::new()
+    .command("pwd && mkdir \"$@\"")
+    .args(&["meow again", "mewo", "mark"])
+    .assert_stdout("1\n")
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn commands() {
   TestBuilder::new()
     .command("echo 1")
@@ -1622,6 +1632,83 @@ async fn listens_for_signals_exits_gracefully() {
       .assert_stdout("interrupted!\n")
       .run()
       .await;
+}
+
+macro_rules! test_for_quoted_unquoted {
+  (
+    quoted: $quoted:literal,
+    unquoted: $unquoted:literal,
+    args: $args:expr,
+    expected: $expected:literal
+  ) => {
+    let variants = [$quoted, $unquoted];
+    for variant in variants {
+      TestBuilder::new()
+        .command(variant)
+        .args($args)
+        .assert_stdout($expected)
+        .run()
+        .await;
+    }
+  };
+
+  (expected: $expected:expr) => {
+    test_for_quoted_unquoted! {
+        quoted: "echo \"$@\"",
+        unquoted: "echo $@",
+        args: &[],
+        expected: $expected
+    }
+  };
+
+  (args: $args:expr, expected: $expected:expr) => {
+    test_for_quoted_unquoted! {
+        quoted: "echo \"$@\"",
+        unquoted: "echo $@",
+        args: $args,
+        expected: $expected
+    }
+  };
+}
+
+#[tokio::test]
+async fn test_at_args_basic_expansion() {
+  test_for_quoted_unquoted! {
+    args: &["one", "two", "three"],
+    expected: "one two three\n"
+  }
+}
+
+#[tokio::test]
+async fn test_at_args_with_no_arguments() {
+  test_for_quoted_unquoted! {
+    args: &[],
+    expected: "\n"
+  }
+}
+
+#[tokio::test]
+async fn test_at_args_with_empty_string_arguments() {
+  // NOTE: should work unless it expands to an echo with spaces like `echo foo `
+  // and the spaces get stripped, echoing only `foo`. What we want is echo to get
+  // the args individually, instead of us giving it the fully parsed argument with
+  // spaces. To do that, we cannot set an env var called `@` and instead need to do
+  // more parsing
+
+  test_for_quoted_unquoted! {
+    args: &["", "foo", ""],
+    expected: " foo \n"
+  }
+}
+
+#[tokio::test]
+async fn test_at_args_multiple_commands() {
+  TestBuilder::new()
+    .command("echo args: $@ && echo again: \"$@\"")
+    .args(&["abc", "def"])
+    .assert_stdout("args: abc def\nagain: abc def\n")
+    .run()
+    .await;
 }
 
 fn no_such_file_error_text() -> &'static str {

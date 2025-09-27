@@ -52,6 +52,7 @@ pub struct ShellState {
   /// Variables that should be evaluated within the shell and
   /// not passed down to any sub commands.
   shell_vars: HashMap<OsString, OsString>,
+  positional_param_len: usize,
   cwd: PathBuf,
   commands: Rc<HashMap<String, Rc<dyn ShellCommand>>>,
   kill_signal: KillSignal,
@@ -61,6 +62,7 @@ pub struct ShellState {
 
 impl ShellState {
   pub fn new(
+    positional_params: Vec<OsString>,
     env_vars: HashMap<OsString, OsString>,
     cwd: PathBuf,
     custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
@@ -72,6 +74,7 @@ impl ShellState {
     let mut result = Self {
       env_vars: Default::default(),
       shell_vars: Default::default(),
+      positional_param_len: positional_params.len(),
       cwd: PathBuf::new(),
       commands: Rc::new(commands),
       kill_signal,
@@ -83,7 +86,45 @@ impl ShellState {
       result.apply_env_var(&name, &value);
     }
     result.set_cwd(cwd);
+
+    // Collect space all positional args separated by spaces for `$@`
+    // let all_positional_args = &args
+    //   .iter()
+    //   .cloned()
+    //   .enumerate()
+    //   .inspect(|(pos, arg)| {
+    //     // Set values for variables of type `$[n]` (ex. `$1`, `$2`, `$3`, ..., `$n`)
+    //     result.apply_env_var(&OsString::from((pos + 1).to_string()), arg)
+    //   })
+    //   .map(|(_, arg)| arg)
+    //   // .filter(|arg| !arg.is_empty())
+    //   .collect::<Vec<_>>()
+    //   .join(&OsString::from(" "));
+
+    // TODO: consider whether we should set `$0` as well in the future
+
+    // result.apply_env_var(&OsString::from("@"), all_positional_args);
+
+    // Set values for variables of type `$[n]` (ex. `$1`, `$2`, `$3`, ..., `$n`)
+    result.apply_changes(
+      positional_params
+        .iter()
+        .enumerate()
+        .map(|(position, param)| {
+          EnvChange::SetShellVar(
+            OsString::from((position + 1).to_string()),
+            param.to_os_string(),
+          )
+        })
+        .collect::<Vec<EnvChange>>()
+        .as_slice(),
+    );
     result
+
+  }
+
+  pub fn positional_param_len(&self) -> usize {
+    self.positional_param_len
   }
 
   pub fn cwd(&self) -> &PathBuf {

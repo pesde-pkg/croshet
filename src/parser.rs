@@ -254,6 +254,21 @@ pub enum WordPart {
   Command(SequentialList),
   /// Quoted string (ex. `"hello"` or `'test'`)
   Quoted(Vec<WordPart>),
+  /// Special parameter expansion (ex. `$@`, `$#`, etc.)
+  SpecialParameters(SpecialParameter),
+}
+
+#[cfg_attr(feature = "serialization", derive(serde::Serialize))]
+#[cfg_attr(
+  feature = "serialization",
+  serde(rename_all = "camelCase", tag = "kind", content = "value")
+)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SpecialParameter {
+  /// Parameter expansion into separate words - `$@`
+  GeneralExpansion,
+
+  // TODO: more (`*`, `#`, `-`, etc.)
 }
 
 #[cfg_attr(feature = "serialization", derive(serde::Serialize))]
@@ -865,8 +880,9 @@ fn parse_word_parts(
 
     let original_input = input;
     let (input, parts) = many0(or7(
-      or3(
+      or4(
         map(tag("$?"), |_| PendingPart::Variable("?")),
+        map(tag("$@"), |_| PendingPart::Variable("@")),
         map(first_escaped_char(mode), PendingPart::Char),
         map(parse_command_substitution, PendingPart::Command),
       ),
@@ -924,6 +940,7 @@ fn parse_word_parts(
           }
         }
         PendingPart::Command(s) => result.push(WordPart::Command(s)),
+        PendingPart::Variable("@") => result.push(WordPart::SpecialParameters(SpecialParameter::GeneralExpansion)),
         PendingPart::Variable(v) => {
           result.push(WordPart::Variable(v.to_string()));
         }

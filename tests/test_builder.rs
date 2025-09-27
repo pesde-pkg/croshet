@@ -63,6 +63,7 @@ impl TempDir {
 }
 
 pub struct TestBuilder {
+  args: Vec<&'static str>,
   // it is much much faster to lazily create this
   temp_dir: Option<TempDir>,
   env_vars: HashMap<String, String>,
@@ -94,6 +95,7 @@ impl TestBuilder {
       .collect();
 
     Self {
+      args: Vec::new(),
       temp_dir: None,
       env_vars,
       custom_commands: Default::default(),
@@ -105,6 +107,17 @@ impl TestBuilder {
       expected_stdout: Default::default(),
       assertions: Default::default(),
     }
+  }
+
+  pub fn args(&mut self, list: &[&'static str]) -> &mut Self {
+    self.args.extend_from_slice(list);
+    self
+  }
+
+  #[allow(unused)]
+  pub fn arg(&mut self, arg: &'static str) -> &mut Self {
+    self.args.push(arg);
+    self
   }
 
   pub fn ensure_temp_dir(&mut self) -> &mut Self {
@@ -225,6 +238,7 @@ impl TestBuilder {
 
     let local_set = tokio::task::LocalSet::new();
     let state = ShellState::new(
+      self.args.iter().map(OsString::from).collect(),
       self
         .env_vars
         .iter()
