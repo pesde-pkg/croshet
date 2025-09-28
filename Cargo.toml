@@ -1,11 +1,11 @@
 [package]
 name = "deno_task_shell"
 version = "0.26.1"
-authors = ["the Deno authors"]
+authors = ["Erica Marigold <hi@devcomp.xyz>", "the Deno authors"]
 documentation = "https://docs.rs/deno_task_shell"
 edition = "2024"
 homepage = "https://deno.land/"
-license = "MIT"
+license = "MIT AND MPL-2.0"
 repository = "https://github.com/denoland/deno_task_shell"
 description = "Cross platform scripting for deno task"
 
