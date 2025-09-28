@@ -228,6 +228,10 @@ impl Word {
     Word(vec![WordPart::Text(text.to_string())])
   }
 
+  pub fn from_parts(parts: Vec<WordPart>) -> Self {
+    Word(parts)
+  }
+
   pub fn parts(&self) -> &Vec<WordPart> {
     &self.0
   }

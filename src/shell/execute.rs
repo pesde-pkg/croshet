@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::string::FromUtf8Error;
-use std::thread::current;
 
 use futures::FutureExt;
 use futures::future;
@@ -926,6 +925,30 @@ fn evaluate_word_parts(
             .await?,
           ),
           WordPart::Quoted(parts) => {
+            if parts.len() == 1
+              && let Some(WordPart::SpecialParameters(_)) = parts.first()
+            {
+              let mut expanded_positionals = Vec::new();
+              for position in 1..state.positional_param_len() + 1 {
+                expanded_positionals.push(Word::from_parts(vec![
+                  WordPart::Quoted(vec![WordPart::Variable(
+                    position.to_string(),
+                  )]),
+                ]));
+              }
+
+              result.extend(
+                evaluate_args(
+                  expanded_positionals,
+                  state,
+                  stdin.clone(),
+                  stderr.clone(),
+                )
+                .await?,
+              );
+              continue;
+            }
+
             let parts = evaluate_word_parts_inner(
               parts,
               true,
@@ -941,27 +964,26 @@ fn evaluate_word_parts(
           }
           WordPart::SpecialParameters(SpecialParameter::GeneralExpansion) => {
             // Expand `$@` to `$1, ..., $[n]`
-
-            // NOTE: for now, regardless of whether `$@` is quoted, we behave as if it were
-            // change in future! we are provided is_quoted for this!
+            let mut expanded_positionals = Vec::new();
             for position in 1..state.positional_param_len() + 1 {
-              let part = if is_quoted {
-                TextPart::Quoted
-              } else {
-                TextPart::Text
-              };
-              let expanded_var = state
-                .get_var(OsString::from(position.to_string()).as_os_str())
-                .expect("unreachable: `$@` should not try to expand into an undefined positional")
-                .clone();
-
-              // FIXME: this entire thing becomes a singular word. we want them to be different words
-              current_text.push(part(expanded_var));
-              current_text.push(TextPart::Text(" ".into()));
+              expanded_positionals.extend(vec![
+                WordPart::Variable(position.to_string()),
+                WordPart::Text(" ".to_string()),
+              ]);
             }
+            expanded_positionals.pop(); // remove the trailing space
 
-            current_text.pop();
-            continue; // do we return or continue???
+            Some(
+              evaluate_word_parts_inner(
+                expanded_positionals,
+                is_quoted,
+                state,
+                stdin.clone(),
+                stderr.clone(),
+              )
+              .await?
+              .join(OsString::from(" ").as_os_str()),
+            )
           }
         };
 

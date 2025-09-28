@@ -15,16 +15,6 @@ mod test_builder;
 const FOLDER_SEPERATOR: char = if cfg!(windows) { '\\' } else { '/' };
 
 #[tokio::test]
-async fn meow() {
-  TestBuilder::new()
-    .command("pwd && mkdir \"$@\"")
-    .args(&["meow again", "mewo", "mark"])
-    .assert_stdout("1\n")
-    .run()
-    .await;
-}
-
-#[tokio::test]
 async fn commands() {
   TestBuilder::new()
     .command("echo 1")
@@ -1688,17 +1678,31 @@ async fn test_at_args_with_no_arguments() {
 }
 
 #[tokio::test]
-async fn test_at_args_with_empty_string_arguments() {
+async fn test_at_args_empty_strings() {
   // NOTE: should work unless it expands to an echo with spaces like `echo foo `
   // and the spaces get stripped, echoing only `foo`. What we want is echo to get
   // the args individually, instead of us giving it the fully parsed argument with
   // spaces. To do that, we cannot set an env var called `@` and instead need to do
   // more parsing
 
-  test_for_quoted_unquoted! {
-    args: &["", "foo", ""],
-    expected: " foo \n"
-  }
+  TestBuilder::new()
+    .command("echo \"$@\"")
+    .args(&["", "foo", ""])
+    .assert_stdout(" foo \n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("echo $@")
+    .args(&["", "foo", ""])
+    .assert_stdout("foo\n")
+    .run()
+    .await;
+
+  // test_for_quoted_unquoted! {
+  //   args: &["", "foo", ""],
+  //   expected: " foo \n"
+  // }
 }
 
 #[tokio::test]
@@ -1707,6 +1711,37 @@ async fn test_at_args_multiple_commands() {
     .command("echo args: $@ && echo again: \"$@\"")
     .args(&["abc", "def"])
     .assert_stdout("args: abc def\nagain: abc def\n")
+    .run()
+    .await;
+}
+
+#[tokio::test]
+async fn test_at_args_spaces() {
+  // Expansion of quoted `$@`
+  TestBuilder::new()
+    .command("mkdir \"$@\"")
+    .args(&["foo", "bar baz", "123"])
+    .assert_exists("foo")
+    .assert_exists("bar baz")
+    .assert_exists("123")
+    .run()
+    .await;
+
+  // Expansions of unquoted `$@`
+  TestBuilder::new()
+    .command("mkdir \"directory $@\"")
+    .args(&["foobar", "baz"])
+    .assert_exists("directory foobar baz")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("mkdir $@")
+    .args(&["one", "two three", "four"])
+    .assert_exists("one")
+    .assert_exists("two")
+    .assert_exists("three")
+    .assert_exists("four")
     .run()
     .await;
 }
