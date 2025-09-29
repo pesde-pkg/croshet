@@ -48,7 +48,7 @@ use super::command::UnresolvedCommandName;
 use super::command::execute_unresolved_command_name;
 use super::types::TreeExitCodeCell;
 
-/// Executes a `SequentialList` of commands in a deno_task_shell environment.
+/// Executes a `SequentialList` of commands in a croshet environment.
 ///
 /// This function accepts a list of commands, a map of environment variables, the current working directory,
 /// and a map of custom shell commands. It sets up the shell state and then calls `execute_with_pipes`
@@ -384,7 +384,7 @@ async fn resolve_redirect_pipe(
     IoFile::Fd(fd) => match &redirect.op {
       RedirectOp::Input(RedirectOpInput::Redirect) => {
         let _ = stderr.write_line(
-            "deno_task_shell: input redirecting file descriptors is not implemented",
+            "croshet: input redirecting file descriptors is not implemented",
           );
         Err(ExecuteResult::from_exit_code(1))
       }
@@ -393,7 +393,7 @@ async fn resolve_redirect_pipe(
         2 => Ok(RedirectPipe::Output(stderr.clone())),
         _ => {
           let _ = stderr.write_line(
-            "deno_task_shell: output redirecting file descriptors beyond stdout and stderr is not implemented",
+            "croshet: output redirecting file descriptors beyond stdout and stderr is not implemented",
           );
           Err(ExecuteResult::from_exit_code(1))
         }

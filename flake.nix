@@ -1,5 +1,5 @@
 {
-  description = "deno_task_shell development environment";
+  description = "croshet development environment";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -64,17 +64,17 @@
             }
           );
 
-        deno_task_shell = pkgs.callPackage crate { };
+        croshet = pkgs.callPackage crate { };
       in
       {
-        apps.default = flake-utils.lib.mkApp { drv = deno_task_shell; };
+        apps.default = flake-utils.lib.mkApp { drv = croshet; };
         packages = {
-          default = deno_task_shell;
-          inherit deno_task_shell;
+          default = croshet;
+          inherit croshet;
         };
 
         checks = {
-          inherit deno_task_shell;
+          inherit croshet;
           formatting = pkgs.runCommandLocal "treefmt-check" { buildInputs = [ pkgs.nixfmt-tree ]; } ''
             set -euo pipefail
             cp -r ${./.} workdir
@@ -86,7 +86,7 @@
 
         formatter = pkgs.nixfmt-tree;
         devShells.default = craneLib.devShell {
-          inputsFrom = [ deno_task_shell ];
+          inputsFrom = [ croshet ];
           checks = self.checks.${system};
           packages = with pkgs; [
             git

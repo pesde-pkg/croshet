@@ -1,13 +1,13 @@
 [package]
-name = "deno_task_shell"
+name = "croshet"
 version = "0.26.1"
 authors = ["Erica Marigold <hi@devcomp.xyz>", "the Deno authors"]
-documentation = "https://docs.rs/deno_task_shell"
+documentation = "https://docs.rs/croshet"
 edition = "2024"
-homepage = "https://deno.land/"
+homepage = "https://pesde.dev/"
 license = "MIT AND MPL-2.0"
-repository = "https://github.com/denoland/deno_task_shell"
-description = "Cross platform scripting for deno task"
+repository = "https://github.com/pesde-pkg/croshet"
+description = "Cross platform Unix-like shell scripting library"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(tokio_unstable)'] }

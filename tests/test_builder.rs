@@ -7,19 +7,19 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use anyhow::Context;
-use deno_task_shell::KillSignal;
-use deno_task_shell::ShellCommand;
-use deno_task_shell::ShellCommandContext;
-use deno_task_shell::ShellPipeWriter;
-use deno_task_shell::ShellState;
-use deno_task_shell::execute_with_pipes;
-use deno_task_shell::parser::parse;
-use deno_task_shell::pipe;
+use croshet::KillSignal;
+use croshet::ShellCommand;
+use croshet::ShellCommandContext;
+use croshet::ShellPipeWriter;
+use croshet::ShellState;
+use croshet::execute_with_pipes;
+use croshet::parser::parse;
+use croshet::pipe;
 use futures::future::LocalBoxFuture;
 use pretty_assertions::assert_eq;
 use tokio::task::JoinHandle;
 
-use deno_task_shell::ExecuteResult;
+use croshet::ExecuteResult;
 
 type FnShellCommandExecute =
   Box<dyn Fn(ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult>>;

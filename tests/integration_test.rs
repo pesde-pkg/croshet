@@ -3,9 +3,9 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use deno_task_shell::ExecuteResult;
-use deno_task_shell::KillSignal;
-use deno_task_shell::SignalKind;
+use croshet::ExecuteResult;
+use croshet::KillSignal;
+use croshet::SignalKind;
 use futures::FutureExt;
 
 use self::test_builder::TestBuilder;
@@ -674,7 +674,7 @@ async fn redirects_output() {
   TestBuilder::new()
     .command(r#"echo 1 >&3"#)
     .assert_stderr(
-      "deno_task_shell: output redirecting file descriptors beyond stdout and stderr is not implemented\n",
+      "croshet: output redirecting file descriptors beyond stdout and stderr is not implemented\n",
     )
     .assert_exit_code(1)
     .run()
@@ -721,7 +721,7 @@ async fn redirects_input() {
   TestBuilder::new()
     .command(r#"cat - <&0"#)
     .assert_stderr(
-      "deno_task_shell: input redirecting file descriptors is not implemented\n",
+      "croshet: input redirecting file descriptors is not implemented\n",
     )
     .assert_exit_code(1)
     .run()
