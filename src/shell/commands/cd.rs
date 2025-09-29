@@ -10,7 +10,6 @@ use anyhow::bail;
 use futures::future::LocalBoxFuture;
 use path_dedot::ParseDot;
 
-use crate::shell::fs_util;
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
 
@@ -45,7 +44,7 @@ fn execute_cd(cwd: &Path, args: &[OsString]) -> Result<PathBuf> {
   let new_dir = match new_dir.parse_dot() {
     Ok(path) => path.to_path_buf(),
     // fallback to canonicalize path just in case
-    Err(_) => fs_util::canonicalize_path(&new_dir)?,
+    Err(_) => dunce::canonicalize(&new_dir)?,
   };
   if !new_dir.is_dir() {
     bail!("{}: Not a directory", path.to_string_lossy())
@@ -110,7 +109,7 @@ mod test {
   #[test]
   fn gets_new_cd() {
     let dir = tempdir().unwrap();
-    let dir_path = fs_util::canonicalize_path(dir.path()).unwrap();
+    let dir_path = dunce::canonicalize(dir.path()).unwrap();
 
     // non-existent
     assert_eq!(

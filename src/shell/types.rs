@@ -15,6 +15,7 @@ use std::rc::Weak;
 
 use anyhow::Result;
 use futures::future::LocalBoxFuture;
+use soft_canonicalize::soft_canonicalize;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
@@ -120,7 +121,6 @@ impl ShellState {
         .as_slice(),
     );
     result
-
   }
 
   pub fn positional_param_len(&self) -> usize {
@@ -192,10 +192,7 @@ impl ShellState {
     if name == "PWD" {
       let cwd = Path::new(value);
       if cwd.is_absolute()
-        && let Ok(cwd) = deno_path_util::fs::canonicalize_path_maybe_not_exists(
-          &sys_traits::impls::RealSys,
-          cwd,
-        )
+        && let Ok(cwd) = soft_canonicalize(cwd)
       {
         // this will update the environment variable too
         self.set_cwd(cwd);
@@ -759,13 +756,14 @@ mod test {
   use crate::KillSignal;
   use crate::SignalKind;
 
-  #[tokio::test]
+  #[cfg(tokio_unstable)]
+  #[tokio_macros::test(flavor = "local")]
   async fn test_send_and_wait_any() {
     let kill_signal = KillSignal::default();
 
     // Spawn a task to send a signal
     let signal_sender = kill_signal.clone();
-    deno_unsync::spawn(async move {
+    tokio::task::spawn_local(async move {
       signal_sender.send(SignalKind::SIGTERM);
     });
 
@@ -774,7 +772,8 @@ mod test {
     assert_eq!(signal, SignalKind::SIGTERM);
   }
 
-  #[tokio::test]
+  #[cfg(tokio_unstable)]
+  #[tokio_macros::test(flavor = "local")]
   async fn test_signal_propagation_to_child_and_grandchild() {
     let parent_signal = KillSignal::default();
     let child_signal = parent_signal.child_signal();
@@ -783,7 +782,7 @@ mod test {
 
     // Spawn a task to send a signal from the parent
     let parent = parent_signal.clone();
-    deno_unsync::spawn(async move {
+    tokio::task::spawn_local(async move {
       parent.send(SignalKind::SIGKILL);
     });
 
@@ -818,13 +817,14 @@ mod test {
     assert!(grandchild2_signal.aborted_code().is_some());
   }
 
-  #[tokio::test]
+  #[cfg(tokio_unstable)]
+  #[tokio_macros::test(flavor = "local")]
   async fn test_wait_aborted() {
     let kill_signal = KillSignal::default();
 
     // Spawn a task to send an aborting signal
     let signal_sender = kill_signal.clone();
-    deno_unsync::spawn(async move {
+    tokio::task::spawn_local(async move {
       signal_sender.send(SignalKind::SIGABRT);
     });
 
@@ -834,7 +834,8 @@ mod test {
     assert!(kill_signal.aborted_code().is_some());
   }
 
-  #[tokio::test]
+  #[cfg(tokio_unstable)]
+  #[tokio_macros::test(flavor = "local")]
   async fn test_propagation_and_is_aborted_flag() {
     let parent_signal = KillSignal::default();
     let child_signal = parent_signal.child_signal();
@@ -843,7 +844,7 @@ mod test {
     assert!(child_signal.aborted_code().is_none());
 
     // Send an aborting signal from the parent
-    deno_unsync::spawn({
+    tokio::task::spawn_local({
       let parent_signal = parent_signal.clone();
       async move {
         parent_signal.send(SignalKind::SIGQUIT);
@@ -856,8 +857,8 @@ mod test {
     assert_eq!(parent_signal.aborted_code(), Some(128 + 3));
     assert_eq!(child_signal.aborted_code(), Some(128 + 3));
   }
-
-  #[tokio::test]
+  #[cfg(tokio_unstable)]
+  #[tokio_macros::test(flavor = "local")]
   async fn test_dropped_child_signal_cleanup() {
     let parent_signal = KillSignal::default();
 
@@ -868,7 +869,7 @@ mod test {
     }
 
     // Send a signal from the parent
-    deno_unsync::spawn({
+    tokio::task::spawn_local({
       let parent_signal = parent_signal.clone();
       async move {
         parent_signal.send(SignalKind::SIGTERM);

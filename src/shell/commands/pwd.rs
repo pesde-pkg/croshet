@@ -6,7 +6,6 @@ use futures::future::LocalBoxFuture;
 use std::ffi::OsString;
 use std::path::Path;
 
-use crate::shell::fs_util;
 use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;
@@ -38,7 +37,7 @@ impl ShellCommand for PwdCommand {
 fn execute_pwd(cwd: &Path, args: &[OsString]) -> Result<String> {
   let flags = parse_args(args)?;
   let cwd = if flags.logical {
-    fs_util::canonicalize_path(cwd)
+    dunce::canonicalize(cwd)
       .with_context(|| format!("error canonicalizing: {}", cwd.display()))?
   } else {
     cwd.to_path_buf()

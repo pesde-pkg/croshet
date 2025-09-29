@@ -1601,14 +1601,15 @@ async fn provided_signal_cancel() {
   assert!(start_time.elapsed().as_secs() < 1);
 }
 
-#[tokio::test]
+#[cfg(tokio_unstable)]
+#[tokio_macros::test(flavor = "local")]
 async fn listens_for_signals_exits_gracefully() {
   if cfg!(windows) {
     return; // signals are terrible on windows
   }
 
   let kill_signal = KillSignal::default();
-  deno_unsync::spawn({
+  tokio::task::spawn_local({
     let kill_signal = kill_signal.clone();
     async move {
       tokio::time::sleep(Duration::from_millis(100)).await;

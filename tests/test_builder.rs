@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -54,7 +53,7 @@ struct TempDir {
 impl TempDir {
   pub fn new() -> Self {
     let temp_dir = tempfile::tempdir().unwrap();
-    let cwd = canonicalize_path(temp_dir.path()).unwrap();
+    let cwd = dunce::canonicalize(temp_dir.path()).unwrap();
     Self {
       _inner: temp_dir,
       cwd,
@@ -311,8 +310,4 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
   let (reader, writer) = pipe();
   let handle = reader.pipe_to_string_handle();
   (writer, handle)
-}
-
-fn canonicalize_path(path: &Path) -> std::io::Result<PathBuf> {
-  Ok(deno_path_util::strip_unc_prefix(path.canonicalize()?))
 }

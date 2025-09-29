@@ -22,6 +22,5 @@ mod child_process_tracker;
 mod command;
 mod commands;
 mod execute;
-mod fs_util;
 mod types;
 mod which;
