@@ -1,4 +1,4 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// SPDX-License-Identifier: MIT AND MPL-2.0
 
 use std::collections::HashMap;
 use std::ffi::OsString;

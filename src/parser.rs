@@ -1,4 +1,4 @@
-// Copyright 2018-2025 the Deno authors. MIT license.
+// SPDX-License-Identifier: MIT AND MPL-2.0
 
 use anyhow::Result;
 use anyhow::bail;
@@ -271,7 +271,6 @@ pub enum WordPart {
 pub enum SpecialParameter {
   /// Parameter expansion into separate words - `$@`
   GeneralExpansion,
-
   // TODO: more (`*`, `#`, `-`, etc.)
 }
 
@@ -944,7 +943,9 @@ fn parse_word_parts(
           }
         }
         PendingPart::Command(s) => result.push(WordPart::Command(s)),
-        PendingPart::Variable("@") => result.push(WordPart::SpecialParameters(SpecialParameter::GeneralExpansion)),
+        PendingPart::Variable("@") => result.push(WordPart::SpecialParameters(
+          SpecialParameter::GeneralExpansion,
+        )),
         PendingPart::Variable(v) => {
           result.push(WordPart::Variable(v.to_string()));
         }
