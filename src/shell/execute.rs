@@ -57,10 +57,7 @@ use super::types::TreeExitCodeCell;
 ///
 /// # Arguments
 /// * `list` - A `SequentialList` of commands to execute.
-/// * `env_vars` - A map of environment variables which are set in the shell.
-/// * `cwd` - The current working directory.
-/// * `custom_commands` - A map of custom shell commands and their ShellCommand implementation.
-/// * `kill_signal` - Use to send signals to spawned executables.
+/// * `options` - Various options regarding execution behavior.
 ///
 /// # Returns
 /// The exit code of the command execution.
@@ -86,15 +83,26 @@ pub async fn execute(list: SequentialList, options: ExecuteOptions) -> i32 {
   }
 }
 
+/// Options for executing a command or process.
 #[derive(Clone)]
 pub struct ExecuteOptions {
+  /// The command line arguments.
   pub args: Vec<OsString>,
+  /// Environment variables as key-value pairs.
   pub env_vars: HashMap<OsString, OsString>,
+  /// The working directory path.
+  ///
+  /// **Warning**: This option is mandatory and *cannot* be an empty `PathBuf`.
   pub cwd: PathBuf,
+  /// Custom shell commands mapped by name.
   pub custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+  /// Signal sent to kill the process.
   pub kill_signal: KillSignal,
+  /// Reader for the standard input pipe.
   pub stdin: ShellPipeReader,
+  /// Writer for the standard output pipe.
   pub stdout: ShellPipeWriter,
+  /// Writer for the standard error pipe.
   pub stderr: ShellPipeWriter,
 }
 
@@ -114,6 +122,7 @@ impl Default for ExecuteOptions {
 }
 
 impl ExecuteOptions {
+  /// Creates a `ShellState` from the options, consuming it in the process.
   pub fn into_shell_state(self) -> ShellState {
     ShellState::new(
       self.args,
@@ -125,6 +134,9 @@ impl ExecuteOptions {
   }
 }
 
+/// Builder pattern constructor for `ExecuteOptions`.
+///
+/// **Warning**: At least the `cwd` method must be called with a non-empty `PathBuf`.
 pub struct ExecuteOptionsBuilder(ExecuteOptions);
 
 impl ExecuteOptionsBuilder {
@@ -187,6 +199,10 @@ impl ExecuteOptionsBuilder {
     self
   }
 
+  /// Returns the finally constructed `ExecuteOptions`.
+  ///
+  /// # Errors
+  /// Returns an error if the working directory was an empty `PathBuf` or unset.
   pub fn build(self) -> Result<ExecuteOptions, ExecuteOptionsError> {
     if self.0.cwd.is_empty() {
       return Err(ExecuteOptionsError::UndefinedCwd);

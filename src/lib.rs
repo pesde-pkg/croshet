@@ -14,7 +14,7 @@ pub use shell::*;
 
 /// Macro to simplify running command(s) without having to construct a `SequentialList` and pass
 /// options manually. The macro results in a `Future` returning a `Result` with an `i32` or a `Vec<i32>`
-/// when executing in bulk.
+/// when executing in bulk. Sets the working directory to the process' working directory.
 ///
 /// ```rs
 /// println!(
@@ -24,6 +24,10 @@ pub use shell::*;
 ///    .await
 ///    .unwrap()
 /// );
+///
+/// # Errors
+/// - If the command supplied had incorrect or unsupported syntax.
+/// - The call to `std::env::current_dir` to get the working directory failed.
 /// ```
 #[cfg(feature = "shell")]
 #[macro_export]
