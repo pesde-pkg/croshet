@@ -10,10 +10,8 @@ Execute a singular command, or run them in bulk without much control over how:
 ```rs
 println!(
     "singular exec result: {}, bulk exec results: {:?}",
-    sh!("echo hello, croshet!").await.unwrap(),
-    sh!["echo $(pwd)", "mkdir hi_mom", "rm -rf hi_mom", "exit 1"]
-        .await
-        .unwrap()
+    sh!("echo hello, croshet!").await?,
+    sh!["echo $(pwd)", "mkdir hi_mom", "rm -rf hi_mom", "exit 1"].await?
 );
 ```
 
