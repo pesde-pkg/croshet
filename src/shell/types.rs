@@ -88,24 +88,6 @@ impl ShellState {
     }
     result.set_cwd(cwd);
 
-    // Collect space all positional args separated by spaces for `$@`
-    // let all_positional_args = &args
-    //   .iter()
-    //   .cloned()
-    //   .enumerate()
-    //   .inspect(|(pos, arg)| {
-    //     // Set values for variables of type `$[n]` (ex. `$1`, `$2`, `$3`, ..., `$n`)
-    //     result.apply_env_var(&OsString::from((pos + 1).to_string()), arg)
-    //   })
-    //   .map(|(_, arg)| arg)
-    //   // .filter(|arg| !arg.is_empty())
-    //   .collect::<Vec<_>>()
-    //   .join(&OsString::from(" "));
-
-    // TODO: consider whether we should set `$0` as well in the future
-
-    // result.apply_env_var(&OsString::from("@"), all_positional_args);
-
     // Set values for variables of type `$[n]` (ex. `$1`, `$2`, `$3`, ..., `$n`)
     result.apply_changes(
       positional_params

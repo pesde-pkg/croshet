@@ -7,12 +7,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use anyhow::Context;
+use croshet::ExecuteOptionsBuilder;
 use croshet::KillSignal;
 use croshet::ShellCommand;
 use croshet::ShellCommandContext;
 use croshet::ShellPipeWriter;
-use croshet::ShellState;
-use croshet::execute_with_pipes;
+use croshet::execute;
 use croshet::parser::parse;
 use croshet::pipe;
 use futures::future::LocalBoxFuture;
@@ -236,20 +236,25 @@ impl TestBuilder {
     let (stderr, stderr_handle) = get_output_writer_and_handle();
 
     let local_set = tokio::task::LocalSet::new();
-    let state = ShellState::new(
-      self.args.iter().map(OsString::from).collect(),
-      self
-        .env_vars
-        .iter()
-        .map(|(k, v)| (OsString::from(k), OsString::from(v)))
-        .collect(),
-      cwd.clone(),
-      self.custom_commands.drain().collect(),
-      self.kill_signal.clone(),
-    );
-    let exit_code = local_set
-      .run_until(execute_with_pipes(list, state, stdin, stdout, stderr))
-      .await;
+    let options = ExecuteOptionsBuilder::new()
+      .args(self.args.iter().map(OsString::from).collect())
+      .env_vars(
+        self
+          .env_vars
+          .iter()
+          .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+          .collect::<Vec<(OsString, OsString)>>()
+          .as_slice(),
+      )
+      .cwd(cwd.clone())
+      .custom_commands(self.custom_commands.drain().collect())
+      .kill_signal(self.kill_signal.clone())
+      .stdin(stdin)
+      .stdout(stdout)
+      .stderr(stderr)
+      .build()
+      .unwrap();
+    let exit_code = local_set.run_until(execute(list, options)).await;
     let temp_dir = if let Some(temp_dir) = &self.temp_dir {
       temp_dir.cwd.display().to_string()
     } else {

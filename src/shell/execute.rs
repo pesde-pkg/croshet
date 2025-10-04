@@ -11,6 +11,7 @@ use std::string::FromUtf8Error;
 use futures::FutureExt;
 use futures::future;
 use futures::future::LocalBoxFuture;
+use nix::NixPath;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -63,54 +64,15 @@ use super::types::TreeExitCodeCell;
 ///
 /// # Returns
 /// The exit code of the command execution.
-pub async fn execute(
-  list: SequentialList,
-  args: Vec<OsString>,
-  env_vars: HashMap<OsString, OsString>,
-  cwd: PathBuf,
-  custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
-  kill_signal: KillSignal,
-) -> i32 {
-  let state =
-    ShellState::new(args, env_vars, cwd, custom_commands, kill_signal);
-  execute_with_pipes(
-    list,
-    state,
-    ShellPipeReader::stdin(),
-    ShellPipeWriter::stdout(),
-    ShellPipeWriter::stderr(),
-  )
-  .await
-}
-
-/// Executes a `SequentialList` of commands with specified input and output pipes.
-///
-/// This function accepts a list of commands, a shell state, and pipes for standard input, output, and error.
-/// This function allows the user to retrive the data outputted by the execution and act on it using code.
-/// This is made public for the use-case of running tests with shell execution in application depending on the library.
-///
-/// # Arguments
-///
-/// * `list` - A `SequentialList` of commands to execute.
-/// * `state` - The current state of the shell, including environment variables and the current directory.
-/// * `stdin` - A reader for the standard input stream.
-/// * `stdout` - A writer for the standard output stream.
-/// * `stderr` - A writer for the standard error stream.
-///
-/// # Returns
-///
-/// The exit code of the command execution.
-pub async fn execute_with_pipes(
-  list: SequentialList,
-  state: ShellState,
-  stdin: ShellPipeReader,
-  stdout: ShellPipeWriter,
-  stderr: ShellPipeWriter,
-) -> i32 {
+pub async fn execute(list: SequentialList, options: ExecuteOptions) -> i32 {
   // spawn a sequential list and pipe its output to the environment
+  let stdin = options.stdin.clone();
+  let stdout = options.stdout.clone();
+  let stderr = options.stderr.clone();
+
   let result = execute_sequential_list(
     list,
-    state,
+    options.into_shell_state(),
     stdin,
     stdout,
     stderr,
@@ -122,6 +84,122 @@ pub async fn execute_with_pipes(
     ExecuteResult::Exit(code, _) => code,
     ExecuteResult::Continue(exit_code, _, _) => exit_code,
   }
+}
+
+#[derive(Clone)]
+pub struct ExecuteOptions {
+  pub args: Vec<OsString>,
+  pub env_vars: HashMap<OsString, OsString>,
+  pub cwd: PathBuf,
+  pub custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+  pub kill_signal: KillSignal,
+  pub stdin: ShellPipeReader,
+  pub stdout: ShellPipeWriter,
+  pub stderr: ShellPipeWriter,
+}
+
+impl Default for ExecuteOptions {
+  fn default() -> Self {
+    Self {
+      args: Vec::default(),
+      env_vars: HashMap::default(),
+      cwd: PathBuf::new(),
+      custom_commands: HashMap::default(),
+      kill_signal: KillSignal::default(),
+      stdin: ShellPipeReader::stdin(),
+      stdout: ShellPipeWriter::stdout(),
+      stderr: ShellPipeWriter::stderr(),
+    }
+  }
+}
+
+impl ExecuteOptions {
+  pub fn into_shell_state(self) -> ShellState {
+    ShellState::new(
+      self.args,
+      self.env_vars,
+      self.cwd,
+      self.custom_commands,
+      self.kill_signal,
+    )
+  }
+}
+
+pub struct ExecuteOptionsBuilder(ExecuteOptions);
+
+impl ExecuteOptionsBuilder {
+  pub fn new() -> Self {
+    ExecuteOptionsBuilder(ExecuteOptions::default())
+  }
+
+  pub fn arg(mut self, value: OsString) -> Self {
+    self.0.args.push(value);
+    self
+  }
+
+  pub fn args(mut self, list: Vec<OsString>) -> Self {
+    self.0.args.extend(list);
+    self
+  }
+
+  pub fn env_var(mut self, key: OsString, value: OsString) -> Self {
+    self.0.env_vars.insert(key, value);
+    self
+  }
+
+  pub fn env_vars(mut self, pairs: &[(OsString, OsString)]) -> Self {
+    for (key, value) in pairs.iter().cloned() {
+      self.0.env_vars.insert(key, value);
+    }
+    self
+  }
+
+  pub fn cwd(mut self, path: PathBuf) -> Self {
+    self.0.cwd = path;
+    self
+  }
+
+  pub fn custom_commands(
+    mut self,
+    commands: HashMap<String, Rc<dyn ShellCommand>>,
+  ) -> Self {
+    self.0.custom_commands.extend(commands);
+    self
+  }
+
+  pub fn kill_signal(mut self, signal: KillSignal) -> Self {
+    self.0.kill_signal = signal;
+    self
+  }
+
+  pub fn stdin(mut self, reader: ShellPipeReader) -> Self {
+    self.0.stdin = reader;
+    self
+  }
+
+  pub fn stdout(mut self, writer: ShellPipeWriter) -> Self {
+    self.0.stdout = writer;
+    self
+  }
+
+  pub fn stderr(mut self, writer: ShellPipeWriter) -> Self {
+    self.0.stderr = writer;
+    self
+  }
+
+  pub fn build(self) -> Result<ExecuteOptions, ExecuteOptionsError> {
+    if self.0.cwd.is_empty() {
+      return Err(ExecuteOptionsError::UndefinedCwd);
+    }
+
+    Ok(self.0)
+  }
+}
+
+#[derive(Debug, Error)]
+pub enum ExecuteOptionsError {
+  #[error("Working directory either unset or set to empty path")]
+  UndefinedCwd,
 }
 
 #[derive(Debug, PartialEq)]
@@ -384,8 +462,8 @@ async fn resolve_redirect_pipe(
     IoFile::Fd(fd) => match &redirect.op {
       RedirectOp::Input(RedirectOpInput::Redirect) => {
         let _ = stderr.write_line(
-            "croshet: input redirecting file descriptors is not implemented",
-          );
+          "croshet: input redirecting file descriptors is not implemented",
+        );
         Err(ExecuteResult::from_exit_code(1))
       }
       RedirectOp::Output(_op) => match fd {
