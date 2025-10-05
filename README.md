@@ -7,7 +7,7 @@
 ### Shorthand macro
 Execute a singular command, or run them in bulk without much control over how:
 
-```rs
+```rust
 println!(
     "singular exec result: {}, bulk exec results: {:?}",
     sh!("echo hello, croshet!").await?,
@@ -18,7 +18,7 @@ println!(
 ### Manual execution
 Lower level API to manually run commands with full control over the options and lifecycle of the process:
 
-```rs
+```rust
 // Parse the text
 let list = croshet::parser::parse(&text)?;
 let kill_signal = KillSignal::default();

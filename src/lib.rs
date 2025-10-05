@@ -3,6 +3,7 @@
 #![deny(clippy::print_stderr)]
 #![deny(clippy::print_stdout)]
 #![deny(clippy::unused_async)]
+#![doc = include_str!("../README.md")]
 
 pub mod parser;
 
@@ -16,7 +17,7 @@ pub use shell::*;
 /// options manually. The macro results in a `Future` returning a `Result` with an `i32` or a `Vec<i32>`
 /// when executing in bulk. Sets the working directory to the process' working directory.
 ///
-/// ```rs
+/// ```rust
 /// println!(
 ///  "singular exec result: {}, bulk exec results: {:?}",
 ///  sh!("echo hello, croshet!").await.unwrap(),
@@ -24,11 +25,11 @@ pub use shell::*;
 ///    .await
 ///    .unwrap()
 /// );
+/// ```
 ///
 /// # Errors
 /// - If the command supplied had incorrect or unsupported syntax.
-/// - The call to `std::env::current_dir` to get the working directory failed.
-/// ```
+/// - If the call to `std::env::current_dir` to get the working directory failed.
 #[cfg(feature = "shell")]
 #[macro_export]
 macro_rules! sh {
