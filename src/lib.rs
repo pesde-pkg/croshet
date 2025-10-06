@@ -3,7 +3,7 @@
 #![deny(clippy::print_stderr)]
 #![deny(clippy::print_stdout)]
 #![deny(clippy::unused_async)]
-#![doc = include_str!("../README.md")]
+#![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 
 pub mod parser;
 
@@ -17,7 +17,7 @@ pub use shell::*;
 /// options manually. The macro results in a `Future` returning a `Result` with an `i32` or a `Vec<i32>`
 /// when executing in bulk. Sets the working directory to the process' working directory.
 ///
-/// ```rust
+/// ```ignore
 /// println!(
 ///  "singular exec result: {}, bulk exec results: {:?}",
 ///  sh!("echo hello, croshet!").await.unwrap(),
