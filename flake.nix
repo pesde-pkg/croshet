@@ -43,7 +43,17 @@
 
         # Base arguments passed to almost all crane invocations
         commonCraneArgs = {
-          src = craneLib.cleanCargoSource ./.;
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions ([
+              (craneLib.fileset.commonCargoSources ./.)
+              (lib.fileset.fromSource ./README.md)
+            ]);
+          };
+          nativeCheckInputs = with pkgs; [
+            lune
+            lua
+          ];
           strictDeps = true;
         };
 
@@ -90,6 +100,8 @@
           packages = with pkgs; [
             git
             nixfmt-tree
+            lua
+            lune
           ];
 
           shellHook = ''
