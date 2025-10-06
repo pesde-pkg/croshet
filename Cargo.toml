@@ -1,6 +1,6 @@
 [package]
 name = "croshet"
-version = "0.26.1"
+version = "0.1.0"
 authors = ["Erica Marigold <hi@devcomp.xyz>", "the Deno authors"]
 documentation = "https://docs.rs/croshet"
 edition = "2024"
