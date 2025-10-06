@@ -39,7 +39,7 @@ println!("Command exited with code: {}", croshet::execute(list.clone(), options.
 
 // ...Or, execute with a timeout
 let rt = tokio::task::LocalSet::new()
-rt.run_util(async move {
+rt.run_until(async move {
     // Execute the command in a separate task
     tokio::task::spawn_local(async move {
         let exit_code = croshet::execute(list, options).await;
