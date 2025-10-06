@@ -1,6 +1,5 @@
 # croshet
-
-<!-- [![](https://img.shields.io/crates/v/deno_task_shell.svg)](https://crates.io/crates/deno_task_shell) -->
+A cross-platform UNIX-like shell scripting library, developed by pesde primarily to solve the annoying [`rimraf` problem](https://npm.im/rimraf).
 
 ## Examples
 
@@ -51,3 +50,8 @@ rt.run_until(async move {
     kill_signal.send(croshet::SignalKind::SIGKILL);
 })
 ```
+
+## What's with the name?
+This project was initially forked from Deno's [`deno_task_shell`](https://github.com/denoland/deno_task_shell), which we found a bit too boring of a name :p
+
+Instead, we settled for the name `croshet`, pronounced /kroʊˈʃeɪ/ (or simply, 'crochet'), as the library "crochets together" several UNIX-y shell features (most POSIX `sh` and  some `bash` features, common UNIX command line tools, etc.) with a bit of *sh*ell related flair.
