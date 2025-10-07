@@ -22,27 +22,35 @@ jobs:
   ci:
     env:
       CARGO_TERM_COLOR: always
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: Linux x86_64
             image: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
 
           - runner: Linux aarch64
             image: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
 
           - runner: macOS x86_64
-            image: macos-14-large
+            image: macos-15
+            target: x86_64-apple-darwin
 
           - runner: macOS aarch64
-            image: macos-14
+            image: macos-15
+            target: aarch64-apple-darwin
 
           - runner: Windows x86_64
             image: windows-2025
+            target: x86_64-pc-windows-msvc
 
           - runner: Windows aarch64
             image: windows-11-arm
+            target: aarch64-pc-windows-msvc
 
     name: CI - ${{ matrix.runner }}
     runs-on: ${{ matrix.image }}
@@ -50,25 +58,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install nix
-        uses: nixbuild/nix-quick-install-action@v34
+      - name: Use sscache for caching
+        uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Update nix channels
-        run: |
-          nix-channel --add https://nixos.org/channels/nixpkgs-unstable
-          nix-channel --update
-
-      - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v6
-        id: nix-cache
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
-          gc-max-store-size-linux: 5368709000
-          purge: true
-          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-
-          purge-created: 0
-          purge-primary-key: never
+          targets: ${{ matrix.target }}
 
-      - name: Lint, test, and check code
-        run: nix flake check
+      - name: Formatting and linting
+        run: |
+          cargo fmt --check
+          cargo check --locked --all-features --target ${{ matrix.target }}
+
+      - name: Run tests
+        run: cargo test --locked --all-features --target ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --all-features --target ${{ matrix.target }}
