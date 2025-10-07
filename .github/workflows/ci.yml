@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - ".github/dependabot.yml"
+      - "LICENSE"
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  actions: write
+
+jobs:
+  ci:
+    env:
+      CARGO_TERM_COLOR: always
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: Linux x86_64
+            image: ubuntu-22.04
+
+          - runner: Linux aarch64
+            image: ubuntu-22.04-arm
+
+          - runner: macOS x86_64
+            image: macos-14-large
+
+          - runner: macOS aarch64
+            image: macos-14
+
+          - runner: Windows x86_64
+            image: windows-2025
+
+          - runner: Windows aarch64
+            image: windows-11-arm
+
+    name: CI - ${{ matrix.runner }}
+    runs-on: ${{ matrix.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install nix
+        uses: nixbuild/nix-quick-install-action@v33
+
+      - name: Update nix channels
+        run: |
+          nix-channel --add https://nixos.org/channels/nixpkgs-unstable
+          nix-channel --update
+
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v6
+        id: nix-cache
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
+          gc-max-store-size-linux: 5368709000
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-${{ runner.arch }}-
+          purge-created: 0
+          purge-primary-key: never
+
+      - name: Lint, test, and check code
+        run: nix flake check
