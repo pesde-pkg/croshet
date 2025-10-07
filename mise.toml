@@ -22,7 +22,7 @@ CARGO_TARGET={{option(name="target")}} cargo test \
     --locked \
     --all-features \
     ${CARGO_TARGET:+--features "$CARGO_TARGET"} \
-    {{arg(name="test_name", var = true)}}
+    {{arg(name="test_name", var = true, default = "")}}
 """
 
 [tasks.build]
