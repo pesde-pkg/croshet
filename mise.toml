@@ -28,7 +28,7 @@ CARGO_TARGET={{option(name="target")}} cargo test \
 [tasks.build]
 description = "Build with release optimatizations (ensures locked all features)"
 run = """
-CARGO_TARGET={{option(name="cargo_target")}} cargo build \
+CARGO_TARGET={{option(name="target")}} cargo build \
     --locked \
     --all-features \
     ${CARGO_TARGET:+--features "$CARGO_TARGET"}
