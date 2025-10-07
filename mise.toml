@@ -11,14 +11,14 @@ RUSTC_WRAPPER = "sccache"
 description = "Run checks for formatting and linting (ensures locked and all features)"
 run = [
     "cargo fmt --check",
-    'CARGO_TARGET={{option(name="cargo_target")}} cargo check --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
-    'CARGO_TARGET={{option(name="cargo_target")}} cargo clippy --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
+    'CARGO_TARGET={{option(name="target")}} cargo check --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
+    'CARGO_TARGET={{option(name="target")}} cargo clippy --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
 ]
 
 [tasks.test]
 description = "Run integration, doc, and other tests (ensures locked and all features)"
 run = """
-CARGO_TARGET={{option(name="cargo_target")}} cargo test \
+CARGO_TARGET={{option(name="target")}} cargo test \
     --locked \
     --all-features \
     ${CARGO_TARGET:+--features "$CARGO_TARGET"} \
