@@ -64,10 +64,10 @@ jobs:
           install: true
 
       - name: Run checks (formatting and linting)
-        run: mise run checks --target ${{ matrix.target }}
+        run: mise run check --target ${{ matrix.target }}
 
       - name: Run tests
-        run: mise run tests --target ${{ matrix.target }}
+        run: mise run test --target ${{ matrix.target }}
 
       - name: Build
         run: mise run build --target ${{ matrix.target }}
