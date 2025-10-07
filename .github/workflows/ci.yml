@@ -68,6 +68,7 @@ jobs:
         with:
           version: 2025.10.5
           install: true
+          cache: false
 
       - name: Configure sccache
         uses: actions/github-script@v7
