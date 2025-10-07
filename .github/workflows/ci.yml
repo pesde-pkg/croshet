@@ -57,6 +57,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install dependencies (${{ matrix.runner }})
+        if: runner.arch == 'aarch64' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreadline-dev
+
       - name: Install tooling
         uses: jdx/mise-action@v2
         with:
