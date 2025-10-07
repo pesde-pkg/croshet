@@ -20,10 +20,15 @@
     }:
     flake-utils.lib.eachSystem
       [
+        # Linux
         "x86_64-linux"
         "aarch64-linux"
+
+        # macOS
         "x86_64-darwin"
-        "aarch64-arm"
+        "aarch64-darwin"
+
+        # Windows
         "x86_64-windows"
         "aarch64-windows"
       ]
