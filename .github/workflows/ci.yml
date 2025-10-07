@@ -23,7 +23,6 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     strategy:
       fail-fast: false
       matrix:
@@ -58,10 +57,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Use sscache for caching
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - uses: jdx/mise-action@v2
+      - name: Install tooling
+        uses: jdx/mise-action@v2
         with:
           version: 2025.10.5
           install: true
@@ -74,3 +71,6 @@ jobs:
 
       - name: Build
         run: mise run build --target ${{ matrix.target }}
+
+      - name: Run sccache stat for check
+        run: sccache --show-stats
