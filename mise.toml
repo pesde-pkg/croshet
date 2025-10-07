@@ -1,0 +1,35 @@
+[tools]
+rust = { version = "1.89.0", profile = "default", components = "rust-src,rust-analyzer" }
+sccache = "0.10.0"
+"github:lune-org/lune" = "0.10.2"
+lua = "5.2.4"
+
+[env]
+RUSTC_WRAPPER = "sccache"
+
+[tasks.check]
+description = "Run checks for formatting and linting (ensures locked and all features)"
+run = [
+    "cargo fmt --check",
+    'CARGO_TARGET={{option(name="cargo_target")}} cargo check --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
+    'CARGO_TARGET={{option(name="cargo_target")}} cargo clippy --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
+]
+
+[tasks.test]
+description = "Run integration, doc, and other tests (ensures locked and all features)"
+run = """
+CARGO_TARGET={{option(name="cargo_target")}} cargo test \
+    --locked \
+    --all-features \
+    ${CARGO_TARGET:+--features "$CARGO_TARGET"} \
+    {{arg(name="test_name", var = true)}}
+"""
+
+[tasks.build]
+description = "Build with release optimatizations (ensures locked all features)"
+run = """
+CARGO_TARGET={{option(name="cargo_target")}} cargo build \
+    --locked \
+    --all-features \
+    ${CARGO_TARGET:+--features "$CARGO_TARGET"}
+"""
