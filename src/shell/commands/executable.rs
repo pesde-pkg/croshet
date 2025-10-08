@@ -76,6 +76,8 @@ impl ShellCommand for ExecutableCommand {
             }
           },
           signal = context.state.kill_signal().wait_any() => {
+            // the conditional unix kill isnt present on non-unix and this if statement becomes collapsible
+            #[cfg_attr(not(unix), allow(clippy::collapsible_if))]
             if let Some(_id) = child.id() {
               #[cfg(unix)]
               kill(_id as i32, signal);
