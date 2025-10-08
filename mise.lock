@@ -1,0 +1,14 @@
+[[tools."github:lune-org/lune"]]
+version = "0.10.2"
+backend = "github:lune-org/lune"
+
+[[tools.rust]]
+version = "1.89.0"
+backend = "core:rust"
+
+[[tools."ubi:mozilla/sccache"]]
+version = "0.10.0"
+backend = "ubi:mozilla/sccache[matching_regex=sccache-v.*]"
+
+[tools."ubi:mozilla/sccache".platforms.linux-x64-sccache]
+checksum = "blake3:cf43caf7ca395fcaec952ae27e48915cd135127c88e9838a21136941df6c796f"
