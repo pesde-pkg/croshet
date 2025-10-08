@@ -1,6 +1,6 @@
 [tools]
 rust = { version = "1.89.0", profile = "default", components = "rustfmt,rust-src,rust-analyzer" }
-"ubi:mozilla/sccache" = "0.10.0"
+"ubi:mozilla/sccache" = { version = "0.10.0", matching_regex = "sccache-v.*" }
 "github:lune-org/lune" = "0.10.2"
 lua = "5.2.4"
 
