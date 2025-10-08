@@ -90,7 +90,7 @@ jobs:
             }
 
             const sccachePath = `${cacheDir()}/sccache`;
-            fs.mkdirSync(path, { recursive: true });
+            fs.mkdirSync(sccachePath, { recursive: true });
             core.exportVariable('SCCACHE_PATH', sccachePath);
 
             core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
