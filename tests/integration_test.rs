@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
+use std::process::ExitCode;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -1267,21 +1268,62 @@ VAR2="other"
 
 #[tokio::test]
 async fn stdin() {
-  TestBuilder::new()
-        .command(r#"lua -e "print(string.byte(io.read(1))); print(string.byte(io.read(1)))""#)
-        .stdin("12345")
-        .assert_stdout("49\n50\n")
-        .run()
-        .await;
+  // A custom command which reads `n` bytes from stdin, consuming each byte one-by-one
+  let read_bytes_command =
+    Box::new(|mut context: croshet::ShellCommandContext| {
+      async move {
+        let mut imp = || -> Result<ExecuteResult, anyhow::Error> {
+          if let Some(byte_count) = context.args.first() {
+            let byte_count = byte_count
+              .to_string_lossy()
+              .parse::<u8>()
+              .or(Err(anyhow::anyhow!("count must be a number from 0-255")))?;
+
+            let mut buf = [0u8, byte_count];
+            let n = context.stdin.read(&mut buf)?;
+            for i in 0..n {
+              context.stdout.write_line(&format!("{}", buf[i]))?;
+            }
+
+            // If less than 2 bytes were available, have send an error code
+            return Ok(ExecuteResult::from_exit_code(i32::from(
+              byte_count as usize > n,
+            )));
+          }
+
+          context.stderr.write_line("usage: read-bytes [count]")?;
+          Ok(ExecuteResult::from_exit_code(255))
+        };
+
+        match imp() {
+          Ok(result) => result,
+          Err(err) => {
+            context
+              .stderr
+              .write_line(&format!("read-bytes: {}", err.to_string()))
+              .unwrap();
+            ExecuteResult::from_exit_code(1)
+          }
+        }
+      }
+      .boxed_local()
+    });
 
   TestBuilder::new()
-       .command(
-           r#"echo "12345" | lua -e "print(string.byte(io.read(1))); print(string.byte(io.read(1)))""#
-       )
-      .stdin("55555") // should not use this because stdin is piped from the echo
-      .assert_stdout("49\n50\n")
-      .run()
-      .await;
+    .custom_command("read-bytes", read_bytes_command.clone())
+    .command("read-bytes 2")
+    .stdin("12345")
+    .assert_stdout("49\n50\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .custom_command("read-bytes", read_bytes_command)
+    .command(r#"echo "12345" | read-bytes 2"#)
+    .stdin("55555") // should not use this because stdin is piped from the echo
+    .assert_stdout("49\n50\n")
+    .run()
+    .await;
 }
 
 #[cfg(windows)]
