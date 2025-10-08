@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use std::process::ExitCode;
 use std::time::Duration;
 use std::time::Instant;
 
