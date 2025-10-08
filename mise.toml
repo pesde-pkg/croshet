@@ -30,3 +30,7 @@ CARGO_TARGET={{option(name="target")}} cargo build \
     --all-features \
     ${CARGO_TARGET:+--features "$CARGO_TARGET"}
 """
+
+[settings]
+experimental = true
+lockfile = true
