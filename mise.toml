@@ -2,7 +2,6 @@
 rust = { version = "1.89.0", profile = "default", components = "rustfmt,rust-src,rust-analyzer" }
 "ubi:mozilla/sccache" = { version = "0.10.0", matching_regex = "sccache-v.*" }
 "github:lune-org/lune" = "0.10.2"
-lua = "5.2.4"
 
 [tasks.check]
 description = "Run checks for formatting and linting (ensures locked and all features)"
