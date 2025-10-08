@@ -11,7 +11,6 @@ use std::string::FromUtf8Error;
 use futures::FutureExt;
 use futures::future;
 use futures::future::LocalBoxFuture;
-use nix::NixPath;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -204,7 +203,7 @@ impl ExecuteOptionsBuilder {
   /// # Errors
   /// Returns an error if the working directory was an empty `PathBuf` or unset.
   pub fn build(self) -> Result<ExecuteOptions, ExecuteOptionsError> {
-    if self.0.cwd.is_empty() {
+    if self.0.cwd.as_os_str().is_empty() {
       return Err(ExecuteOptionsError::UndefinedCwd);
     }
 
