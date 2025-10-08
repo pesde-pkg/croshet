@@ -136,6 +136,7 @@ impl ExecuteOptions {
 /// Builder pattern constructor for `ExecuteOptions`.
 ///
 /// **Warning**: At least the `cwd` method must be called with a non-empty `PathBuf`.
+#[derive(Clone, Default)]
 pub struct ExecuteOptionsBuilder(ExecuteOptions);
 
 impl ExecuteOptionsBuilder {
