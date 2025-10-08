@@ -5,6 +5,7 @@ rust = { version = "1.89.0", profile = "default", components = "rustfmt,rust-src
 
 [tasks.check]
 description = "Run checks for formatting and linting (ensures locked and all features)"
+shell = "bash -c"
 run = [
     "cargo fmt --check",
     'CARGO_TARGET={{option(name="target")}} cargo check --locked --all-features ${CARGO_TARGET:+--features "$CARGO_TARGET"}',
@@ -13,6 +14,7 @@ run = [
 
 [tasks.test]
 description = "Run integration, doc, and other tests (ensures locked and all features)"
+shell = "bash -c"
 run = """
 CARGO_TARGET={{option(name="target")}} cargo test \
     --locked \
@@ -23,6 +25,7 @@ CARGO_TARGET={{option(name="target")}} cargo test \
 
 [tasks.build]
 description = "Build with release optimatizations (ensures locked all features)"
+shell = "bash -c"
 run = """
 CARGO_TARGET={{option(name="target")}} cargo build \
     --locked \
