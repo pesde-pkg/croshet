@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use anyhow::Result;
+use crate::Result;
 
 use tokio::process::Child;
 
@@ -64,8 +64,8 @@ impl Tracker for NullChildProcessTracker {
 mod windows {
   use std::ptr;
 
-  use anyhow::Result;
-  use anyhow::bail;
+  use crate::Result;
+  use crate::bail;
   use tokio::process::Child;
 
   use windows_sys::Win32::Foundation::HANDLE;

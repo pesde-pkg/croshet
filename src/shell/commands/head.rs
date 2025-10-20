@@ -5,14 +5,14 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::future::LocalBoxFuture;
 
 use crate::ExecuteResult;
+use crate::Result;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
 use crate::ShellPipeWriter;
+use crate::bail;
 use crate::shell::KillSignal;
 
 use super::args::ArgKind;
@@ -150,7 +150,8 @@ fn parse_args<'a>(args: &'a [OsString]) -> Result<HeadFlags<'a>> {
         if flag == "lines" || flag == "lines=" {
           bail!("expected a value for --lines");
         } else if let Some(arg) = flag.strip_prefix("lines=") {
-          lines = Some(arg.parse::<u64>()?);
+          lines =
+            Some(arg.parse::<u64>().map_err(|err| anyhow::Error::from(err))?);
         } else {
           arg.bail_unsupported()?
         }

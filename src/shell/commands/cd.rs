@@ -5,11 +5,11 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::future::LocalBoxFuture;
 use path_dedot::ParseDot;
 
+use crate::Result;
+use crate::bail;
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
 

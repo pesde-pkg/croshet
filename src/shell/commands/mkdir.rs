@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::FutureExt;
 use futures::future::LocalBoxFuture;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 
+use crate::Result;
+use crate::bail;
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeWriter;
 

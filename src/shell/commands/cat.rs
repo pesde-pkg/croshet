@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use anyhow::Result;
+use crate::Result;
 use futures::future::LocalBoxFuture;
 use std::ffi::OsString;
 use std::fs::File;

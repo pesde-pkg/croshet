@@ -2,12 +2,12 @@
 
 use std::ffi::OsString;
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::FutureExt;
 use futures::future::LocalBoxFuture;
 
 use crate::ExecuteCommandArgsContext;
+use crate::Result;
+use crate::bail;
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeReader;
 
@@ -53,7 +53,7 @@ fn xargs_collect_args(
   let flags = parse_args(cli_args)?;
   let mut buf = Vec::new();
   stdin.pipe_to(&mut buf)?;
-  let text = String::from_utf8(buf)?;
+  let text = String::from_utf8(buf).map_err(anyhow::Error::from)?;
   let mut args = flags.initial_args;
 
   if args.is_empty() {

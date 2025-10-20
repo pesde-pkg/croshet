@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use anyhow::Context;
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
 use std::ffi::OsString;
 use std::path::Path;
 
+use crate::Context;
+use crate::Result;
 use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;

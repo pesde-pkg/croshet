@@ -2,11 +2,11 @@
 
 use std::ffi::OsString;
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::future::LocalBoxFuture;
 
 use crate::EnvChange;
+use crate::Result;
+use crate::bail;
 use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;

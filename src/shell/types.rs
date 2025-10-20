@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fmt::Debug;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -13,9 +14,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::rc::Weak;
 
-use anyhow::Result;
 use futures::future::LocalBoxFuture;
 use soft_canonicalize::soft_canonicalize;
+use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
@@ -23,6 +24,39 @@ use crate::shell::child_process_tracker::ChildProcessTracker;
 
 use super::commands::ShellCommand;
 use super::commands::builtin_commands;
+
+pub type Result<T, E = Error> = core::result::Result<T, E>;
+
+/// An error originating in croshet, wrapping around any dynamic error,
+/// including (but not limited to), command syntax parsing, execution,
+/// or standard library errors.
+///
+/// Due to the large amount of reasons such an error could have been
+/// returned, it is recommended to not handle this error, and rather
+/// forward it to the user as-is, in which case the provided `Display`
+/// implementation should have some human-readable context.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct Error(#[from] anyhow::Error);
+
+impl From<std::io::Error> for Error {
+  fn from(value: std::io::Error) -> Self {
+    Error(anyhow::Error::from(value))
+  }
+}
+
+macro_rules! bail {
+    ($msg:literal $(,)?) => {
+        return Err($crate::Error::from(anyhow::anyhow!($msg)))
+    };
+    ($err:expr $(,)?) => {
+        return Err($crate::Error::from(anyhow::anyhow!($err)))
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        return Err($crate::Error::from(anyhow::anyhow!($fmt, $($arg)*)))
+    };
+}
+pub(crate) use bail;
 
 /// Exit code set when an async task fails or the main execution
 /// line fail.

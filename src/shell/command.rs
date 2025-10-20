@@ -8,14 +8,16 @@ use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 
+use futures::FutureExt;
+use thiserror::Error;
+
+use crate::Error;
 use crate::ExecutableCommand;
 use crate::ExecuteResult;
 use crate::FutureExecuteResult;
+use crate::Result;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
-use anyhow::Result;
-use futures::FutureExt;
-use thiserror::Error;
 
 use super::which::CommandPathResolutionError;
 use super::which::resolve_command_path;
@@ -96,7 +98,7 @@ enum FailedShebangError {
   #[error(transparent)]
   CommandPath(#[from] CommandPathResolutionError),
   #[error(transparent)]
-  Any(#[from] anyhow::Error),
+  Any(#[from] crate::Error),
 }
 
 impl FailedShebangError {
@@ -163,7 +165,7 @@ async fn parse_shebang_args(
   context: &ShellCommandContext,
 ) -> Result<Vec<OsString>> {
   fn err_unsupported(text: &str) -> Result<Vec<OsString>> {
-    anyhow::bail!(
+    crate::bail!(
       "unsupported shebang. Please report this as a bug (https://github.com/denoland/deno).\n\nShebang: {}",
       text
     )
@@ -201,15 +203,14 @@ async fn parse_shebang_args(
     return err_unsupported(text);
   }
 
-  Ok(
-    super::execute::evaluate_args(
-      cmd.args,
-      &context.state,
-      context.stdin.clone(),
-      context.stderr.clone(),
-    )
-    .await?,
+  super::execute::evaluate_args(
+    cmd.args,
+    &context.state,
+    context.stdin.clone(),
+    context.stderr.clone(),
   )
+  .await
+  .map_err(|err| Error::from(anyhow::Error::from(err)))
 }
 
 struct Shebang {

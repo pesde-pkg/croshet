@@ -5,13 +5,13 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::Context;
-use anyhow::Result;
-use anyhow::bail;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use futures::future::LocalBoxFuture;
 
+use crate::Context;
+use crate::Result;
+use crate::bail;
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeWriter;
 

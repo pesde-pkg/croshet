@@ -3,8 +3,8 @@
 use std::ffi::OsStr;
 use std::ffi::OsString;
 
-use anyhow::Result;
-use anyhow::bail;
+use crate::Result;
+use crate::bail;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgKind<'a> {

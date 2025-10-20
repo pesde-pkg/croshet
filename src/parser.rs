@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use anyhow::Result;
-use anyhow::bail;
 use monch::*;
+
+use crate::Error;
+use crate::Result;
+use crate::bail;
 
 // Shell grammar rules this is loosely based on:
 // https://pubs.opengroup.org/onlinepubs/009604499/utilities/xcu_chap02.html#tag_02_10_02
@@ -348,13 +350,15 @@ pub fn parse(input: &str) -> Result<SequentialList> {
       } else {
         fail_for_trailing_input(input)
           .into_result()
-          .map_err(|err| err.into())
+          .map_err(|err| Error::from(anyhow::Error::from(err)))
       }
     }
     Err(ParseError::Backtrace) => fail_for_trailing_input(input)
       .into_result()
-      .map_err(|err| err.into()),
-    Err(ParseError::Failure(e)) => e.into_result().map_err(|err| err.into()),
+      .map_err(|err| Error::from(anyhow::Error::from(err))),
+    Err(ParseError::Failure(e)) => e
+      .into_result()
+      .map_err(|err| Error::from(anyhow::Error::from(err))),
   }
 }
 

@@ -3,11 +3,11 @@
 use std::ffi::OsString;
 use std::time::Duration;
 
-use anyhow::Result;
-use anyhow::bail;
 use futures::FutureExt;
 use futures::future::LocalBoxFuture;
 
+use crate::Result;
+use crate::bail;
 use crate::shell::types::ExecuteResult;
 use crate::shell::types::ShellPipeWriter;
 
@@ -53,7 +53,7 @@ async fn execute_sleep(args: &[OsString]) -> Result<()> {
   Ok(())
 }
 
-fn parse_arg(arg: &str) -> Result<f64> {
+fn parse_arg(arg: &str) -> Result<f64, std::num::ParseFloatError> {
   if let Some(t) = arg.strip_suffix('s') {
     return Ok(t.parse()?);
   }
@@ -80,7 +80,7 @@ fn parse_args(args: &[OsString]) -> Result<u64> {
         match arg
           .to_str()
           .ok_or_else(|| anyhow::anyhow!("invalid utf-8"))
-          .and_then(parse_arg)
+          .and_then(|arg| parse_arg(arg).map_err(anyhow::Error::from))
         {
           Ok(value_s) => {
             let ms = (value_s * 1000f64) as u64;
