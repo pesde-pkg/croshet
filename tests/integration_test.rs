@@ -479,7 +479,9 @@ async fn pipeline() {
   TestBuilder::new()
     .file("init.luau", stdout_forward)
     .command(
-      format!("echo $(sleep 0.1 && echo 2 & echo 1) | lune run .").as_str(),
+      "echo $(sleep 0.1 && echo 2 & echo 1) | lune run ."
+        .to_string()
+        .as_str(),
     )
     .assert_stdout("1 2\n")
     .run()
@@ -1280,8 +1282,8 @@ async fn stdin() {
 
             let mut buf = [0u8, byte_count];
             let n = context.stdin.read(&mut buf)?;
-            for i in 0..n {
-              context.stdout.write_line(&format!("{}", buf[i]))?;
+            for b in buf.iter().take(n) {
+              context.stdout.write_line(&format!("{}", b))?;
             }
 
             // If less than 2 bytes were available, have send an error code
@@ -1299,13 +1301,13 @@ async fn stdin() {
           Err(err) => {
             context
               .stderr
-              .write_line(&format!("read-bytes: {}", err.to_string()))
+              .write_line(&format!("read-bytes: {}", err))
               .unwrap();
             ExecuteResult::from_exit_code(1)
           }
         }
       }
-      .boxed_local()
+      .boxed()
     });
 
   TestBuilder::new()
@@ -1360,7 +1362,7 @@ async fn custom_command() {
           let _ = context.stderr.write_line(&sum.to_string());
           ExecuteResult::from_exit_code(0)
         }
-        .boxed_local()
+        .boxed()
       }),
     )
     .assert_stderr("3\n")
@@ -1383,7 +1385,7 @@ async fn custom_command_resolve_command_path() {
           let _ = context.stdout.write_line(&path.to_string_lossy());
           ExecuteResult::from_exit_code(0)
         }
-        .boxed_local()
+        .boxed()
       }),
     )
     .assert_stdout("1\n")
@@ -1702,21 +1704,21 @@ async fn provided_signal_cancel() {
   assert!(start_time.elapsed().as_secs() < 1);
 }
 
-#[cfg(tokio_unstable)]
-#[tokio_macros::test(flavor = "local")]
+#[tokio::test]
 async fn listens_for_signals_exits_gracefully() {
   if cfg!(windows) {
     return; // signals are terrible on windows
   }
 
   let kill_signal = KillSignal::default();
-  tokio::task::spawn_local({
+  tokio::task::spawn({
     let kill_signal = kill_signal.clone();
     async move {
       tokio::time::sleep(Duration::from_millis(100)).await;
       kill_signal.send(SignalKind::SIGINT);
     }
   });
+
   TestBuilder::new()
       .file("file.sh", r#"trap 'echo "interrupted!"; sleep 0.025; exit 0' SIGINT; while true; do sleep 1; done"#)
       .command("bash ./file.sh")

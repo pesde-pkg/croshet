@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use futures::future::LocalBoxFuture;
-
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
 
@@ -10,11 +8,9 @@ use super::ShellCommandContext;
 
 pub struct ExportCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for ExportCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
     let mut changes = Vec::new();
     for arg in context.args {
       // todo: support non-UTF8 data here
@@ -27,7 +23,7 @@ impl ShellCommand for ExportCommand {
         }
       }
     }
-    let result = ExecuteResult::Continue(0, changes, Vec::new());
-    Box::pin(futures::future::ready(result))
+
+    ExecuteResult::Continue(0, changes, Vec::new())
   }
 }

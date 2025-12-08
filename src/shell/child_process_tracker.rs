@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::Result;
 
@@ -13,19 +13,19 @@ use tokio::process::Child;
 ///
 /// Read more: https://stackoverflow.com/questions/3342941/kill-child-process-when-parent-process-is-killed
 #[derive(Clone)]
-pub struct ChildProcessTracker(Rc<dyn Tracker>);
+pub struct ChildProcessTracker(Arc<dyn Tracker>);
 
 impl ChildProcessTracker {
   #[cfg(windows)]
   pub fn new() -> Self {
     match windows::JobObject::new() {
-      Ok(tracker) => Self(Rc::new(tracker)),
+      Ok(tracker) => Self(Arc::new(tracker)),
       Err(err) => {
         if cfg!(debug_assertions) {
           panic!("Could not start tracking processes. {:#}", err);
         } else {
           // fallback to not tracking processes if this fails
-          Self(Rc::new(NullChildProcessTracker))
+          Self(Arc::new(NullChildProcessTracker))
         }
       }
     }
@@ -35,7 +35,7 @@ impl ChildProcessTracker {
   pub fn new() -> Self {
     // no-op on non-windows platforms as they don't
     // require tracking the child processes
-    Self(Rc::new(NullChildProcessTracker))
+    Self(Arc::new(NullChildProcessTracker))
   }
 
   pub fn track(&self, child: &Child) {

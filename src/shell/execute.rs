@@ -5,12 +5,11 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::string::FromUtf8Error;
+use std::sync::Arc;
 
 use futures::FutureExt;
-use futures::future;
-use futures::future::LocalBoxFuture;
+use futures::future::BoxFuture;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -36,7 +35,6 @@ use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
-use crate::shell::types::FutureExecuteResult;
 use crate::shell::types::KillSignal;
 use crate::shell::types::ShellPipeReader;
 use crate::shell::types::ShellPipeWriter;
@@ -94,7 +92,7 @@ pub struct ExecuteOptions {
   /// **Warning**: This option is mandatory and *cannot* be an empty `PathBuf`.
   pub cwd: PathBuf,
   /// Custom shell commands mapped by name.
-  pub custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+  pub custom_commands: HashMap<String, Arc<dyn ShellCommand>>,
   /// Signal sent to kill the process.
   pub kill_signal: KillSignal,
   /// Reader for the standard input pipe.
@@ -173,7 +171,7 @@ impl ExecuteOptionsBuilder {
 
   pub fn custom_commands(
     mut self,
-    commands: HashMap<String, Rc<dyn ShellCommand>>,
+    commands: HashMap<String, Arc<dyn ShellCommand>>,
   ) -> Self {
     self.0.custom_commands.extend(commands);
     self
@@ -224,83 +222,78 @@ enum AsyncCommandBehavior {
   Yield,
 }
 
-fn execute_sequential_list(
+async fn execute_sequential_list(
   list: SequentialList,
   mut state: ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   stderr: ShellPipeWriter,
   async_command_behavior: AsyncCommandBehavior,
-) -> FutureExecuteResult {
-  async move {
-    let mut final_exit_code = 0;
-    let mut final_changes = Vec::new();
-    let mut async_handles = Vec::new();
-    let mut was_exit = false;
-    for item in list.items {
-      if item.is_async {
-        let state = state.clone();
-        let stdin = stdin.clone();
-        let stdout = stdout.clone();
-        let stderr = stderr.clone();
-        async_handles.push(tokio::task::spawn_local(async move {
-          let main_signal = state.kill_signal().clone();
-          let tree_exit_code_cell = state.tree_exit_code_cell().clone();
-          let result =
-            execute_sequence(item.sequence, state, stdin, stdout, stderr).await;
-          let (exit_code, handles) = result.into_exit_code_and_handles();
-          wait_handles(exit_code, handles, &main_signal, &tree_exit_code_cell)
-            .await
-        }));
-      } else {
-        let result = execute_sequence(
-          item.sequence,
-          state.clone(),
-          stdin.clone(),
-          stdout.clone(),
-          stderr.clone(),
-        )
-        .await;
-        match result {
-          ExecuteResult::Exit(exit_code, handles) => {
-            async_handles.extend(handles);
-            final_exit_code = exit_code;
-            was_exit = true;
-            break;
-          }
-          ExecuteResult::Continue(exit_code, changes, handles) => {
-            state.apply_changes(&changes);
-            state.apply_env_var(
-              OsStr::new("?"),
-              OsStr::new(&exit_code.to_string()),
-            );
-            final_changes.extend(changes);
-            async_handles.extend(handles);
-            // use the final sequential item's exit code
-            final_exit_code = exit_code;
-          }
+) -> ExecuteResult {
+  let mut final_exit_code = 0;
+  let mut final_changes = Vec::new();
+  let mut async_handles = Vec::new();
+  let mut was_exit = false;
+  for item in list.items {
+    if item.is_async {
+      let state = state.clone();
+      let stdin = stdin.clone();
+      let stdout = stdout.clone();
+      let stderr = stderr.clone();
+      async_handles.push(tokio::task::spawn_local(async move {
+        let main_signal = state.kill_signal().clone();
+        let tree_exit_code_cell = state.tree_exit_code_cell().clone();
+        let result =
+          execute_sequence(item.sequence, state, stdin, stdout, stderr).await;
+        let (exit_code, handles) = result.into_exit_code_and_handles();
+        wait_handles(exit_code, handles, &main_signal, &tree_exit_code_cell)
+          .await
+      }));
+    } else {
+      let result = execute_sequence(
+        item.sequence,
+        state.clone(),
+        stdin.clone(),
+        stdout.clone(),
+        stderr.clone(),
+      )
+      .await;
+      match result {
+        ExecuteResult::Exit(exit_code, handles) => {
+          async_handles.extend(handles);
+          final_exit_code = exit_code;
+          was_exit = true;
+          break;
+        }
+        ExecuteResult::Continue(exit_code, changes, handles) => {
+          state.apply_changes(&changes);
+          state
+            .apply_env_var(OsStr::new("?"), OsStr::new(&exit_code.to_string()));
+          final_changes.extend(changes);
+          async_handles.extend(handles);
+          // use the final sequential item's exit code
+          final_exit_code = exit_code;
         }
       }
     }
-
-    // wait for async commands to complete
-    if async_command_behavior == AsyncCommandBehavior::Wait {
-      final_exit_code = wait_handles(
-        final_exit_code,
-        std::mem::take(&mut async_handles),
-        state.kill_signal(),
-        state.tree_exit_code_cell(),
-      )
-      .await;
-    }
-
-    if was_exit {
-      ExecuteResult::Exit(final_exit_code, async_handles)
-    } else {
-      ExecuteResult::Continue(final_exit_code, final_changes, async_handles)
-    }
   }
-  .boxed_local()
+
+  // wait for async commands to complete
+  if async_command_behavior == AsyncCommandBehavior::Wait {
+    final_exit_code = wait_handles(
+      final_exit_code,
+      std::mem::take(&mut async_handles),
+      state.kill_signal(),
+      state.tree_exit_code_cell(),
+    )
+    .await;
+  }
+
+  if was_exit {
+    ExecuteResult::Exit(final_exit_code, async_handles)
+  } else {
+    ExecuteResult::Continue(final_exit_code, final_changes, async_handles)
+  }
 }
 
 async fn wait_handles(
@@ -336,7 +329,7 @@ fn execute_sequence(
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
-) -> FutureExecuteResult {
+) -> BoxFuture<'static, ExecuteResult> {
   // requires boxed async because of recursive async
   async move {
     match sequence {
@@ -416,7 +409,7 @@ fn execute_sequence(
       }
     }
   }
-  .boxed_local()
+  .boxed()
 }
 
 async fn execute_pipeline(
@@ -523,7 +516,7 @@ async fn resolve_redirect_word_pipe(
 
   let words = evaluate_word_parts(
     word.into_parts(),
-    state,
+    state.clone(),
     stdin.clone(),
     stderr.clone(),
   )
@@ -748,20 +741,20 @@ async fn execute_simple_command(
   execute_command_args(args, state, stdin, stdout, stderr).await
 }
 
-fn execute_command_args(
+pub(crate) async fn execute_command_args(
   mut args: Vec<OsString>,
   state: ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
-) -> FutureExecuteResult {
+) -> ExecuteResult {
   let command_name = if args.is_empty() {
     OsString::new()
   } else {
     args.remove(0)
   };
   if let Some(exit_code) = state.kill_signal().aborted_code() {
-    Box::pin(future::ready(ExecuteResult::from_exit_code(exit_code)))
+    ExecuteResult::from_exit_code(exit_code)
   } else if let Some(stripped_name) =
     command_name.to_string_lossy().strip_prefix('!')
   {
@@ -774,7 +767,7 @@ fn execute_command_args(
           "  ! {}",
         ), command_name.to_string_lossy(), stripped_name)
       );
-    Box::pin(future::ready(ExecuteResult::from_exit_code(1)))
+    ExecuteResult::from_exit_code(1)
   } else {
     let command_context = ShellCommandContext {
       args,
@@ -782,25 +775,19 @@ fn execute_command_args(
       stdin,
       stdout,
       stderr,
-      execute_command_args: Box::new(move |context| {
-        execute_command_args(
-          context.args,
-          context.state,
-          context.stdin,
-          context.stdout,
-          context.stderr,
-        )
-      }),
     };
     match command_context.state.resolve_custom_command(&command_name) {
-      Some(command) => command.execute(command_context),
-      None => execute_unresolved_command_name(
-        UnresolvedCommandName {
-          name: command_name,
-          base_dir: command_context.state.cwd().to_path_buf(),
-        },
-        command_context,
-      ),
+      Some(command) => command.execute(command_context).await,
+      None => {
+        execute_unresolved_command_name(
+          UnresolvedCommandName {
+            name: command_name,
+            base_dir: command_context.state.cwd().to_path_buf(),
+          },
+          command_context,
+        )
+        .await
+      }
     }
   }
 }
@@ -815,7 +802,7 @@ pub async fn evaluate_args(
   for arg in args {
     let parts = evaluate_word_parts(
       arg.into_parts(),
-      state,
+      state.clone(),
       stdin.clone(),
       stderr.clone(),
     )
@@ -832,7 +819,8 @@ async fn evaluate_word(
   stderr: ShellPipeWriter,
 ) -> Result<OsString, EvaluateWordTextError> {
   let word_parts =
-    evaluate_word_parts(word.into_parts(), state, stdin, stderr).await?;
+    evaluate_word_parts(word.into_parts(), state.clone(), stdin, stderr)
+      .await?;
   Ok(os_string_join(&word_parts, " "))
 }
 
@@ -865,10 +853,10 @@ impl EvaluateWordTextError {
 
 fn evaluate_word_parts(
   parts: Vec<WordPart>,
-  state: &ShellState,
+  state: ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> LocalBoxFuture<'_, Result<Vec<OsString>, EvaluateWordTextError>> {
+) -> BoxFuture<'static, Result<Vec<OsString>, EvaluateWordTextError>> {
   #[derive(Debug)]
   enum TextPart {
     Quoted(OsString),
@@ -988,10 +976,10 @@ fn evaluate_word_parts(
   fn evaluate_word_parts_inner(
     parts: Vec<WordPart>,
     is_quoted: bool,
-    state: &ShellState,
+    state: ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-  ) -> LocalBoxFuture<'_, Result<Vec<OsString>, EvaluateWordTextError>> {
+  ) -> BoxFuture<'static, Result<Vec<OsString>, EvaluateWordTextError>> {
     // recursive async, so requires boxing
     async move {
       let mut result = Vec::new();
@@ -1004,7 +992,7 @@ fn evaluate_word_parts(
           }
           WordPart::Variable(name) => state.get_var(OsStr::new(&name)).cloned(),
           WordPart::Tilde => Some(
-            sys_traits::impls::real_home_dir_with_env(state)
+            sys_traits::impls::real_home_dir_with_env(&state)
               .map(|s| s.into_os_string())
               .ok_or(EvaluateWordTextError::NoHomeDirectory)?,
           ),
@@ -1034,7 +1022,7 @@ fn evaluate_word_parts(
               result.extend(
                 evaluate_args(
                   expanded_positionals,
-                  state,
+                  &state,
                   stdin.clone(),
                   stderr.clone(),
                 )
@@ -1046,7 +1034,7 @@ fn evaluate_word_parts(
             let parts = evaluate_word_parts_inner(
               parts,
               true,
-              state,
+              state.clone(),
               stdin.clone(),
               stderr.clone(),
             )
@@ -1071,7 +1059,7 @@ fn evaluate_word_parts(
               evaluate_word_parts_inner(
                 expanded_positionals,
                 is_quoted,
-                state,
+                state.clone(),
                 stdin.clone(),
                 stderr.clone(),
               )
@@ -1096,7 +1084,7 @@ fn evaluate_word_parts(
             if !parts.is_empty() {
               // evaluate and store the current text
               result.extend(evaluate_word_text(
-                state,
+                &state,
                 current_text,
                 is_quoted,
               )?);
@@ -1104,7 +1092,7 @@ fn evaluate_word_parts(
               // store all the parts except the last one
               for part in parts.drain(..parts.len() - 1) {
                 result.extend(evaluate_word_text(
-                  state,
+                  &state,
                   vec![part],
                   is_quoted,
                 )?);
@@ -1118,14 +1106,14 @@ fn evaluate_word_parts(
         }
       }
       if !current_text.is_empty() {
-        result.extend(evaluate_word_text(state, current_text, is_quoted)?);
+        result.extend(evaluate_word_text(&state, current_text, is_quoted)?);
       }
       Ok(result)
     }
-    .boxed_local()
+    .boxed()
   }
 
-  evaluate_word_parts_inner(parts, false, state, stdin, stderr)
+  evaluate_word_parts_inner(parts, false, state.clone(), stdin, stderr)
 }
 
 async fn evaluate_command_substitution(
@@ -1135,14 +1123,14 @@ async fn evaluate_command_substitution(
   stderr: ShellPipeWriter,
 ) -> Result<OsString, FromUtf8Error> {
   let data = execute_with_stdout(|shell_stdout_writer| {
-    execute_sequential_list(
+    Box::pin(execute_sequential_list(
       list,
       state.clone(),
       stdin,
       shell_stdout_writer,
       stderr,
       AsyncCommandBehavior::Wait,
-    )
+    ))
   })
   .await;
 
@@ -1194,7 +1182,7 @@ fn trim_and_normalize_whitespaces_to_spaces(input: &[u8]) -> Vec<u8> {
 }
 
 async fn execute_with_stdout(
-  execute: impl FnOnce(ShellPipeWriter) -> FutureExecuteResult,
+  execute: impl FnOnce(ShellPipeWriter) -> BoxFuture<'static, ExecuteResult>,
 ) -> Vec<u8> {
   let (shell_stdout_reader, shell_stdout_writer) = pipe();
   let spawned_output = execute(shell_stdout_writer);

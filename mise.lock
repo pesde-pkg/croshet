@@ -2,6 +2,11 @@
 version = "0.10.2"
 backend = "github:lune-org/lune"
 
+[tools."github:lune-org/lune".platforms.linux-x64]
+checksum = "blake3:d0751198e969577ffc81eef588e51aee8e8507f0a21fe3404ec1ecf4fad5422a"
+size = 5390160
+url = "https://github.com/lune-org/lune/releases/download/v0.10.2/lune-0.10.2-linux-x86_64.zip"
+
 [[tools.rust]]
 version = "1.89.0"
 backend = "core:rust"

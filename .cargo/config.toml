@@ -1,8 +1,3 @@
 [build]
-# Enable unstable tokio features. Required for some tests that use `LocalRuntime`.
-# Those tests get skipped if this is not enabled. We also depend on a git commit
-# containing unpublished changes from `tokio_macros` for this in dev dependencies.
-rustflags = ["--cfg", "tokio_unstable"]
-
-# Enavle sccache for incremental build caching
+# Enable sccache for incremental build caching
 rustc-wrapper = "sccache"

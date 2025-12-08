@@ -5,8 +5,6 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 
-use futures::future::LocalBoxFuture;
-
 use crate::ExecuteResult;
 use crate::Result;
 use crate::ShellCommand;
@@ -20,20 +18,17 @@ use super::args::parse_arg_kinds;
 
 pub struct HeadCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for HeadCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
     let mut stderr = context.stderr.clone();
-    let result = match execute_head(context) {
+    match execute_head(context) {
       Ok(result) => result,
       Err(err) => {
         let _ = stderr.write_line(&format!("head: {err}"));
         ExecuteResult::from_exit_code(1)
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 
@@ -150,8 +145,7 @@ fn parse_args<'a>(args: &'a [OsString]) -> Result<HeadFlags<'a>> {
         if flag == "lines" || flag == "lines=" {
           bail!("expected a value for --lines");
         } else if let Some(arg) = flag.strip_prefix("lines=") {
-          lines =
-            Some(arg.parse::<u64>().map_err(|err| anyhow::Error::from(err))?);
+          lines = Some(arg.parse::<u64>().map_err(anyhow::Error::from)?);
         } else {
           arg.bail_unsupported()?
         }

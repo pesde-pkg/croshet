@@ -13,7 +13,6 @@ pub use execute::execute;
 pub use types::EnvChange;
 pub use types::Error;
 pub use types::ExecuteResult;
-pub use types::FutureExecuteResult;
 pub use types::KillSignal;
 pub use types::KillSignalDropGuard;
 pub use types::Result;

@@ -18,83 +18,82 @@ mod xargs;
 
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::rc::Rc;
-
-use futures::future::LocalBoxFuture;
+use std::sync::Arc;
 
 pub use executable::ExecutableCommand;
 
+use crate::shell;
+
 use super::types::ExecuteResult;
-use super::types::FutureExecuteResult;
 use super::types::ShellPipeReader;
 use super::types::ShellPipeWriter;
 use super::types::ShellState;
 
-pub fn builtin_commands() -> HashMap<String, Rc<dyn ShellCommand>> {
+pub fn builtin_commands() -> HashMap<String, Arc<dyn ShellCommand>> {
   HashMap::from([
     (
       "cat".to_string(),
-      Rc::new(cat::CatCommand) as Rc<dyn ShellCommand>,
+      Arc::new(cat::CatCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "cd".to_string(),
-      Rc::new(cd::CdCommand) as Rc<dyn ShellCommand>,
+      Arc::new(cd::CdCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "cp".to_string(),
-      Rc::new(cp_mv::CpCommand) as Rc<dyn ShellCommand>,
+      Arc::new(cp_mv::CpCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "echo".to_string(),
-      Rc::new(echo::EchoCommand) as Rc<dyn ShellCommand>,
+      Arc::new(echo::EchoCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "exit".to_string(),
-      Rc::new(exit::ExitCommand) as Rc<dyn ShellCommand>,
+      Arc::new(exit::ExitCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "export".to_string(),
-      Rc::new(export::ExportCommand) as Rc<dyn ShellCommand>,
+      Arc::new(export::ExportCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "head".to_string(),
-      Rc::new(head::HeadCommand) as Rc<dyn ShellCommand>,
+      Arc::new(head::HeadCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "mkdir".to_string(),
-      Rc::new(mkdir::MkdirCommand) as Rc<dyn ShellCommand>,
+      Arc::new(mkdir::MkdirCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "mv".to_string(),
-      Rc::new(cp_mv::MvCommand) as Rc<dyn ShellCommand>,
+      Arc::new(cp_mv::MvCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "pwd".to_string(),
-      Rc::new(pwd::PwdCommand) as Rc<dyn ShellCommand>,
+      Arc::new(pwd::PwdCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "rm".to_string(),
-      Rc::new(rm::RmCommand) as Rc<dyn ShellCommand>,
+      Arc::new(rm::RmCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "sleep".to_string(),
-      Rc::new(sleep::SleepCommand) as Rc<dyn ShellCommand>,
+      Arc::new(sleep::SleepCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "true".to_string(),
-      Rc::new(ExitCodeCommand(0)) as Rc<dyn ShellCommand>,
+      Arc::new(ExitCodeCommand(0)) as Arc<dyn ShellCommand>,
     ),
     (
       "false".to_string(),
-      Rc::new(ExitCodeCommand(1)) as Rc<dyn ShellCommand>,
+      Arc::new(ExitCodeCommand(1)) as Arc<dyn ShellCommand>,
     ),
     (
       "unset".to_string(),
-      Rc::new(unset::UnsetCommand) as Rc<dyn ShellCommand>,
+      Arc::new(unset::UnsetCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "xargs".to_string(),
-      Rc::new(xargs::XargsCommand) as Rc<dyn ShellCommand>,
+      Arc::new(xargs::XargsCommand) as Arc<dyn ShellCommand>,
     ),
   ])
 }
@@ -113,15 +112,26 @@ pub struct ShellCommandContext {
   pub stdin: ShellPipeReader,
   pub stdout: ShellPipeWriter,
   pub stderr: ShellPipeWriter,
-  pub execute_command_args:
-    Box<dyn FnOnce(ExecuteCommandArgsContext) -> FutureExecuteResult>,
 }
 
-pub trait ShellCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult>;
+impl ShellCommandContext {
+  pub async fn execute_command_args(
+    context: ExecuteCommandArgsContext,
+  ) -> ExecuteResult {
+    shell::execute::execute_command_args(
+      context.args,
+      context.state,
+      context.stdin,
+      context.stdout,
+      context.stderr,
+    )
+    .await
+  }
+}
+
+#[async_trait::async_trait]
+pub trait ShellCommand: Send + Sync {
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult;
 }
 
 macro_rules! execute_with_cancellation {
@@ -141,14 +151,10 @@ pub(super) use execute_with_cancellation;
 
 struct ExitCodeCommand(i32);
 
+#[async_trait::async_trait]
 impl ShellCommand for ExitCodeCommand {
-  fn execute(
-    &self,
-    _context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  async fn execute(&self, _context: ShellCommandContext) -> ExecuteResult {
     // ignores additional arguments
-    Box::pin(futures::future::ready(ExecuteResult::from_exit_code(
-      self.0,
-    )))
+    ExecuteResult::from_exit_code(self.0)
   }
 }

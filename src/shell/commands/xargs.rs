@@ -2,9 +2,6 @@
 
 use std::ffi::OsString;
 
-use futures::FutureExt;
-use futures::future::LocalBoxFuture;
-
 use crate::ExecuteCommandArgsContext;
 use crate::Result;
 use crate::bail;
@@ -18,31 +15,26 @@ use super::args::parse_arg_kinds;
 
 pub struct XargsCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for XargsCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    async move {
-      match xargs_collect_args(&context.args, context.stdin.clone()) {
-        Ok(args) => {
-          // don't select on cancellation here as that will occur at a lower level
-          (context.execute_command_args)(ExecuteCommandArgsContext {
-            args,
-            state: context.state,
-            stdin: context.stdin,
-            stdout: context.stdout,
-            stderr: context.stderr,
-          })
-          .await
-        }
-        Err(err) => {
-          let _ = context.stderr.write_line(&format!("xargs: {err}"));
-          ExecuteResult::from_exit_code(1)
-        }
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
+    match xargs_collect_args(&context.args, context.stdin.clone()) {
+      Ok(args) => {
+        // don't select on cancellation here as that will occur at a lower level
+        ShellCommandContext::execute_command_args(ExecuteCommandArgsContext {
+          args,
+          state: context.state,
+          stdin: context.stdin,
+          stdout: context.stdout,
+          stderr: context.stderr,
+        })
+        .await
+      }
+      Err(err) => {
+        let _ = context.stderr.write_line(&format!("xargs: {err}"));
+        ExecuteResult::from_exit_code(1)
       }
     }
-    .boxed_local()
   }
 }
 

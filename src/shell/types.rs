@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
 use std::borrow::Cow;
-use std::cell::Cell;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -11,10 +9,11 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
-use std::rc::Weak;
+use std::sync::Arc;
+use std::sync::atomic::AtomicI32;
+use std::sync::atomic::Ordering;
 
-use futures::future::LocalBoxFuture;
+use parking_lot::Mutex;
 use soft_canonicalize::soft_canonicalize;
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -61,18 +60,25 @@ pub(crate) use bail;
 /// Exit code set when an async task fails or the main execution
 /// line fail.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct TreeExitCodeCell(Rc<Cell<i32>>);
+pub(crate) struct TreeExitCodeCell(Arc<AtomicI32>);
 
 impl TreeExitCodeCell {
   pub fn try_set(&self, exit_code: i32) {
-    if self.0.get() == 0 {
+    let current = self.0.load(Ordering::SeqCst);
+    if current == 0 {
       // only set it for the first non-zero failure
-      self.0.set(exit_code);
+      // use compare_exchange to avoid overwriting if another thread set it
+      let _ = self.0.compare_exchange(
+        0,
+        exit_code,
+        Ordering::SeqCst,
+        Ordering::SeqCst,
+      );
     }
   }
 
   pub fn get(&self) -> Option<i32> {
-    match self.0.get() {
+    match self.0.load(Ordering::SeqCst) {
       0 => None,
       code => Some(code),
     }
@@ -89,7 +95,7 @@ pub struct ShellState {
   shell_vars: HashMap<OsString, OsString>,
   positional_param_len: usize,
   cwd: PathBuf,
-  commands: Rc<HashMap<String, Rc<dyn ShellCommand>>>,
+  commands: Arc<HashMap<String, Arc<dyn ShellCommand>>>,
   kill_signal: KillSignal,
   process_tracker: ChildProcessTracker,
   tree_exit_code_cell: TreeExitCodeCell,
@@ -100,7 +106,7 @@ impl ShellState {
     positional_params: Vec<OsString>,
     env_vars: HashMap<OsString, OsString>,
     cwd: PathBuf,
-    custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+    custom_commands: HashMap<String, Arc<dyn ShellCommand>>,
     kill_signal: KillSignal,
   ) -> Self {
     assert!(cwd.is_absolute());
@@ -111,7 +117,7 @@ impl ShellState {
       shell_vars: Default::default(),
       positional_param_len: positional_params.len(),
       cwd: PathBuf::new(),
-      commands: Rc::new(commands),
+      commands: Arc::new(commands),
       kill_signal,
       process_tracker: ChildProcessTracker::new(),
       tree_exit_code_cell: Default::default(),
@@ -235,11 +241,11 @@ impl ShellState {
   pub fn resolve_custom_command(
     &self,
     name: &OsStr,
-  ) -> Option<Rc<dyn ShellCommand>> {
+  ) -> Option<Arc<dyn ShellCommand>> {
     // only bother supporting utf8 custom command names for now
     name
       .to_str()
-      // uses an Rc to allow resolving a command without borrowing from self
+      // uses an Arc to allow resolving a command without borrowing from self
       .and_then(|name| self.commands.get(name).cloned())
   }
 
@@ -277,8 +283,6 @@ pub enum EnvChange {
   UnsetVar(OsString),
   Cd(PathBuf),
 }
-
-pub type FutureExecuteResult = LocalBoxFuture<'static, ExecuteResult>;
 
 #[derive(Debug)]
 pub enum ExecuteResult {
@@ -554,21 +558,15 @@ pub fn pipe() -> (ShellPipeReader, ShellPipeWriter) {
 
 #[derive(Debug)]
 struct KillSignalInner {
-  // WARNING: This should struct should not be made Sync.
-  // Some of the code in this project depends on this not
-  // being cancelled at any time by another thread. For example,
-  // the abort code is checked before executing a sub process and
-  // then awaited after. If an abort happened between that then
-  // it could be missed.
-  aborted_code: RefCell<Option<i32>>,
+  aborted_code: Mutex<Option<i32>>,
   sender: broadcast::Sender<SignalKind>,
-  children: RefCell<Vec<Weak<KillSignalInner>>>,
+  children: Mutex<Vec<std::sync::Weak<KillSignalInner>>>,
 }
 
 impl KillSignalInner {
   pub fn send(&self, signal_kind: SignalKind) {
     if signal_kind.causes_abort() {
-      let mut stored_aborted_code = self.aborted_code.borrow_mut();
+      let mut stored_aborted_code = self.aborted_code.lock();
       if stored_aborted_code.is_none() {
         *stored_aborted_code = Some(signal_kind.aborted_code());
       }
@@ -576,7 +574,8 @@ impl KillSignalInner {
     _ = self.sender.send(signal_kind);
 
     // notify children
-    self.children.borrow_mut().retain(|weak_child| {
+    let mut children = self.children.lock();
+    children.retain(|weak_child| {
       if let Some(child) = weak_child.upgrade() {
         child.send(signal_kind);
         true
@@ -589,15 +588,15 @@ impl KillSignalInner {
 
 /// Used to send signals to commands.
 #[derive(Debug, Clone)]
-pub struct KillSignal(Rc<KillSignalInner>);
+pub struct KillSignal(Arc<KillSignalInner>);
 
 impl Default for KillSignal {
   fn default() -> Self {
     let (sender, _) = broadcast::channel(100);
-    Self(Rc::new(KillSignalInner {
-      aborted_code: RefCell::new(None),
+    Self(Arc::new(KillSignalInner {
+      aborted_code: Mutex::new(None),
       sender,
-      children: Default::default(),
+      children: Mutex::new(Vec::new()),
     }))
   }
 }
@@ -605,21 +604,21 @@ impl Default for KillSignal {
 impl KillSignal {
   /// Exit code to use when aborted.
   pub fn aborted_code(&self) -> Option<i32> {
-    *self.0.aborted_code.borrow()
+    *self.0.aborted_code.lock()
   }
 
   /// Creates a signal that will only send signals to itself
   /// and all descendants--not the parent signal.
   pub fn child_signal(&self) -> Self {
     let (sender, _) = broadcast::channel(100);
-    let child = Rc::new(KillSignalInner {
-      aborted_code: RefCell::new(self.aborted_code()),
+    let child = Arc::new(KillSignalInner {
+      aborted_code: Mutex::new(self.aborted_code()),
       sender,
-      children: RefCell::new(Vec::new()),
+      children: Mutex::new(Vec::new()),
     });
 
     // Add the child to the parent's list of children
-    self.0.children.borrow_mut().push(Rc::downgrade(&child));
+    self.0.children.lock().push(Arc::downgrade(&child));
 
     Self(child)
   }
@@ -632,7 +631,7 @@ impl KillSignal {
   /// Creates a `DropKillSignalGuard` that will send the specified signal on drop.
   pub fn drop_guard_with_kind(self, kind: SignalKind) -> KillSignalDropGuard {
     KillSignalDropGuard {
-      disarmed: Cell::new(false),
+      disarmed: std::sync::atomic::AtomicBool::new(false),
       kill_signal_kind: kind,
       signal: self,
     }
@@ -666,14 +665,14 @@ impl KillSignal {
 /// Guard that on drop will send a signal on the associated `KillSignal`.
 #[derive(Debug)]
 pub struct KillSignalDropGuard {
-  disarmed: Cell<bool>,
+  disarmed: std::sync::atomic::AtomicBool,
   kill_signal_kind: SignalKind,
   signal: KillSignal,
 }
 
 impl Drop for KillSignalDropGuard {
   fn drop(&mut self) {
-    if !self.disarmed.get() {
+    if !self.disarmed.load(std::sync::atomic::Ordering::SeqCst) {
       self.signal.send(self.kill_signal_kind);
     }
   }
@@ -682,7 +681,9 @@ impl Drop for KillSignalDropGuard {
 impl KillSignalDropGuard {
   /// Prevent the drop guard from sending a signal on drop.
   pub fn disarm(&self) {
-    self.disarmed.set(true);
+    self
+      .disarmed
+      .store(true, std::sync::atomic::Ordering::SeqCst);
   }
 }
 
@@ -772,15 +773,16 @@ mod test {
   use crate::KillSignal;
   use crate::SignalKind;
 
-  #[cfg(tokio_unstable)]
-  #[tokio_macros::test(flavor = "local")]
+  #[tokio::test]
   async fn test_send_and_wait_any() {
     let kill_signal = KillSignal::default();
 
     // Spawn a task to send a signal
-    let signal_sender = kill_signal.clone();
-    tokio::task::spawn_local(async move {
-      signal_sender.send(SignalKind::SIGTERM);
+    tokio::task::spawn({
+      let kill_signal = kill_signal.clone();
+      async move {
+        kill_signal.send(SignalKind::SIGTERM);
+      }
     });
 
     // Wait for the signal in the main task
@@ -788,8 +790,7 @@ mod test {
     assert_eq!(signal, SignalKind::SIGTERM);
   }
 
-  #[cfg(tokio_unstable)]
-  #[tokio_macros::test(flavor = "local")]
+  #[tokio::test]
   async fn test_signal_propagation_to_child_and_grandchild() {
     let parent_signal = KillSignal::default();
     let child_signal = parent_signal.child_signal();
@@ -798,7 +799,7 @@ mod test {
 
     // Spawn a task to send a signal from the parent
     let parent = parent_signal.clone();
-    tokio::task::spawn_local(async move {
+    tokio::task::spawn(async move {
       parent.send(SignalKind::SIGKILL);
     });
 
@@ -833,15 +834,16 @@ mod test {
     assert!(grandchild2_signal.aborted_code().is_some());
   }
 
-  #[cfg(tokio_unstable)]
-  #[tokio_macros::test(flavor = "local")]
+  #[tokio::test]
   async fn test_wait_aborted() {
     let kill_signal = KillSignal::default();
 
     // Spawn a task to send an aborting signal
-    let signal_sender = kill_signal.clone();
-    tokio::task::spawn_local(async move {
-      signal_sender.send(SignalKind::SIGABRT);
+    tokio::task::spawn({
+      let kill_signal = kill_signal.clone();
+      async move {
+        kill_signal.send(SignalKind::SIGABRT);
+      }
     });
 
     // Wait for the aborting signal in the main task
@@ -850,8 +852,7 @@ mod test {
     assert!(kill_signal.aborted_code().is_some());
   }
 
-  #[cfg(tokio_unstable)]
-  #[tokio_macros::test(flavor = "local")]
+  #[tokio::test]
   async fn test_propagation_and_is_aborted_flag() {
     let parent_signal = KillSignal::default();
     let child_signal = parent_signal.child_signal();
@@ -860,7 +861,7 @@ mod test {
     assert!(child_signal.aborted_code().is_none());
 
     // Send an aborting signal from the parent
-    tokio::task::spawn_local({
+    tokio::task::spawn({
       let parent_signal = parent_signal.clone();
       async move {
         parent_signal.send(SignalKind::SIGQUIT);
@@ -873,8 +874,8 @@ mod test {
     assert_eq!(parent_signal.aborted_code(), Some(128 + 3));
     assert_eq!(child_signal.aborted_code(), Some(128 + 3));
   }
-  #[cfg(tokio_unstable)]
-  #[tokio_macros::test(flavor = "local")]
+
+  #[tokio::test]
   async fn test_dropped_child_signal_cleanup() {
     let parent_signal = KillSignal::default();
 
@@ -885,7 +886,7 @@ mod test {
     }
 
     // Send a signal from the parent
-    tokio::task::spawn_local({
+    tokio::task::spawn({
       let parent_signal = parent_signal.clone();
       async move {
         parent_signal.send(SignalKind::SIGTERM);

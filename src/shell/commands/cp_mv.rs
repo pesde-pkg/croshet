@@ -5,10 +5,6 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use futures::future::LocalBoxFuture;
-
 use crate::Context;
 use crate::Result;
 use crate::bail;
@@ -23,18 +19,13 @@ use super::execute_with_cancellation;
 
 pub struct CpCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for CpCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    async move {
-      execute_with_cancellation!(
-        cp_command(context.state.cwd(), &context.args, context.stderr),
-        context.state.kill_signal()
-      )
-    }
-    .boxed_local()
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    execute_with_cancellation!(
+      cp_command(context.state.cwd(), &context.args, context.stderr),
+      context.state.kill_signal()
+    )
   }
 }
 
@@ -94,40 +85,34 @@ async fn do_copy_operation(
   Ok(())
 }
 
-fn copy_dir_recursively(
-  from: PathBuf,
-  to: PathBuf,
-) -> BoxFuture<'static, Result<()>> {
+async fn copy_dir_recursively(from: PathBuf, to: PathBuf) -> Result<()> {
   // recursive, so box it
-  async move {
-    tokio::fs::create_dir_all(&to)
-      .await
-      .with_context(|| format!("Creating {}", to.display()))?;
-    let mut read_dir = tokio::fs::read_dir(&from)
-      .await
-      .with_context(|| format!("Reading {}", from.display()))?;
+  tokio::fs::create_dir_all(&to)
+    .await
+    .with_context(|| format!("Creating {}", to.display()))?;
+  let mut read_dir = tokio::fs::read_dir(&from)
+    .await
+    .with_context(|| format!("Reading {}", from.display()))?;
 
-    while let Some(entry) = read_dir.next_entry().await? {
-      let file_type = entry.file_type().await?;
-      let new_from = from.join(entry.file_name());
-      let new_to = to.join(entry.file_name());
+  while let Some(entry) = read_dir.next_entry().await? {
+    let file_type = entry.file_type().await?;
+    let new_from = from.join(entry.file_name());
+    let new_to = to.join(entry.file_name());
 
-      if file_type.is_dir() {
-        copy_dir_recursively(new_from.clone(), new_to.clone())
-          .await
-          .with_context(|| {
-            format!("Dir {} to {}", new_from.display(), new_to.display())
-          })?;
-      } else if file_type.is_file() {
-        tokio::fs::copy(&new_from, &new_to).await.with_context(|| {
-          format!("Copying {} to {}", new_from.display(), new_to.display())
+    if file_type.is_dir() {
+      Box::pin(copy_dir_recursively(new_from.clone(), new_to.clone()))
+        .await
+        .with_context(|| {
+          format!("Dir {} to {}", new_from.display(), new_to.display())
         })?;
-      }
+    } else if file_type.is_file() {
+      tokio::fs::copy(&new_from, &new_to).await.with_context(|| {
+        format!("Copying {} to {}", new_from.display(), new_to.display())
+      })?;
     }
-
-    Ok(())
   }
-  .boxed()
+
+  Ok(())
 }
 
 struct CpFlags {
@@ -168,18 +153,13 @@ fn parse_cp_args(cwd: &Path, args: &[OsString]) -> Result<CpFlags> {
 
 pub struct MvCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for MvCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    async move {
-      execute_with_cancellation!(
-        mv_command(context.state.cwd(), &context.args, context.stderr),
-        context.state.kill_signal()
-      )
-    }
-    .boxed_local()
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    execute_with_cancellation!(
+      mv_command(context.state.cwd(), &context.args, context.stderr),
+      context.state.kill_signal()
+    )
   }
 }
 

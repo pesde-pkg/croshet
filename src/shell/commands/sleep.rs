@@ -3,9 +3,6 @@
 use std::ffi::OsString;
 use std::time::Duration;
 
-use futures::FutureExt;
-use futures::future::LocalBoxFuture;
-
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -19,18 +16,13 @@ use super::execute_with_cancellation;
 
 pub struct SleepCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for SleepCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    async move {
-      execute_with_cancellation!(
-        sleep_command(&context.args, context.stderr),
-        context.state.kill_signal()
-      )
-    }
-    .boxed_local()
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    execute_with_cancellation!(
+      sleep_command(&context.args, context.stderr),
+      context.state.kill_signal()
+    )
   }
 }
 
@@ -55,7 +47,7 @@ async fn execute_sleep(args: &[OsString]) -> Result<()> {
 
 fn parse_arg(arg: &str) -> Result<f64, std::num::ParseFloatError> {
   if let Some(t) = arg.strip_suffix('s') {
-    return Ok(t.parse()?);
+    return t.parse();
   }
   if let Some(t) = arg.strip_suffix('m') {
     return Ok(t.parse::<f64>()? * 60.);
@@ -67,7 +59,7 @@ fn parse_arg(arg: &str) -> Result<f64, std::num::ParseFloatError> {
     return Ok(t.parse::<f64>()? * 60. * 60. * 24.);
   }
 
-  Ok(arg.parse()?)
+  arg.parse()
 }
 
 fn parse_args(args: &[OsString]) -> Result<u64> {

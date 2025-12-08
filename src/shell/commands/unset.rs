@@ -2,8 +2,6 @@
 
 use std::ffi::OsString;
 
-use futures::future::LocalBoxFuture;
-
 use crate::EnvChange;
 use crate::Result;
 use crate::bail;
@@ -14,12 +12,10 @@ use super::ShellCommandContext;
 
 pub struct UnsetCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for UnsetCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
-    let result = match parse_names(context.args) {
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
+    match parse_names(context.args) {
       Ok(names) => ExecuteResult::Continue(
         0,
         names.into_iter().map(EnvChange::UnsetVar).collect(),
@@ -29,8 +25,7 @@ impl ShellCommand for UnsetCommand {
         let _ = context.stderr.write_line(&format!("unset: {err}"));
         ExecuteResult::Continue(1, Vec::new(), Vec::new())
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 

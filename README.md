@@ -37,18 +37,14 @@ let options = croshet::ExecuteOptionsBuilder::new()
 println!("Command exited with code: {}", croshet::execute(list.clone(), options.clone()).await);
 
 // ...Or, execute with a timeout
-let rt = tokio::task::LocalSet::new()
-rt.run_until(async move {
-    // Execute the command in a separate task
-    tokio::task::spawn_local(async move {
-        let exit_code = croshet::execute(list, options).await;
-        println!("Command exited with code: {}", exit_code);
-    });
-
-    // Wait for 5s to wait for the command to finish executing
+// Set up a separate task to cancel the execution in 5s
+tokio::task::spawn(async move {
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    kill_signal.send(croshet::SignalKind::SIGKILL);
-})
+    kill_signal.send(croshet::SignalKind::SIGKILL); 
+});
+
+let exit_code = croshet::execute(list, options).await;
+println!("Command exited with code: {}", exit_code);
 ```
 
 ## What's with the name?
