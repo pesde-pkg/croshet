@@ -5,11 +5,10 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::string::FromUtf8Error;
+use std::sync::Arc;
 
 use futures::FutureExt;
-use futures::future;
 use futures::future::BoxFuture;
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -36,7 +35,6 @@ use crate::shell::commands::ShellCommand;
 use crate::shell::commands::ShellCommandContext;
 use crate::shell::types::EnvChange;
 use crate::shell::types::ExecuteResult;
-use crate::shell::types::FutureExecuteResult;
 use crate::shell::types::KillSignal;
 use crate::shell::types::ShellPipeReader;
 use crate::shell::types::ShellPipeWriter;
@@ -224,83 +222,78 @@ enum AsyncCommandBehavior {
   Yield,
 }
 
-fn execute_sequential_list(
+async fn execute_sequential_list(
   list: SequentialList,
   mut state: ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   stderr: ShellPipeWriter,
   async_command_behavior: AsyncCommandBehavior,
-) -> FutureExecuteResult {
-  async move {
-    let mut final_exit_code = 0;
-    let mut final_changes = Vec::new();
-    let mut async_handles = Vec::new();
-    let mut was_exit = false;
-    for item in list.items {
-      if item.is_async {
-        let state = state.clone();
-        let stdin = stdin.clone();
-        let stdout = stdout.clone();
-        let stderr = stderr.clone();
-        async_handles.push(tokio::task::spawn_local(async move {
-          let main_signal = state.kill_signal().clone();
-          let tree_exit_code_cell = state.tree_exit_code_cell().clone();
-          let result =
-            execute_sequence(item.sequence, state, stdin, stdout, stderr).await;
-          let (exit_code, handles) = result.into_exit_code_and_handles();
-          wait_handles(exit_code, handles, &main_signal, &tree_exit_code_cell)
-            .await
-        }));
-      } else {
-        let result = execute_sequence(
-          item.sequence,
-          state.clone(),
-          stdin.clone(),
-          stdout.clone(),
-          stderr.clone(),
-        )
-        .await;
-        match result {
-          ExecuteResult::Exit(exit_code, handles) => {
-            async_handles.extend(handles);
-            final_exit_code = exit_code;
-            was_exit = true;
-            break;
-          }
-          ExecuteResult::Continue(exit_code, changes, handles) => {
-            state.apply_changes(&changes);
-            state.apply_env_var(
-              OsStr::new("?"),
-              OsStr::new(&exit_code.to_string()),
-            );
-            final_changes.extend(changes);
-            async_handles.extend(handles);
-            // use the final sequential item's exit code
-            final_exit_code = exit_code;
-          }
+) -> ExecuteResult {
+  let mut final_exit_code = 0;
+  let mut final_changes = Vec::new();
+  let mut async_handles = Vec::new();
+  let mut was_exit = false;
+  for item in list.items {
+    if item.is_async {
+      let state = state.clone();
+      let stdin = stdin.clone();
+      let stdout = stdout.clone();
+      let stderr = stderr.clone();
+      async_handles.push(tokio::task::spawn_local(async move {
+        let main_signal = state.kill_signal().clone();
+        let tree_exit_code_cell = state.tree_exit_code_cell().clone();
+        let result =
+          execute_sequence(item.sequence, state, stdin, stdout, stderr).await;
+        let (exit_code, handles) = result.into_exit_code_and_handles();
+        wait_handles(exit_code, handles, &main_signal, &tree_exit_code_cell)
+          .await
+      }));
+    } else {
+      let result = execute_sequence(
+        item.sequence,
+        state.clone(),
+        stdin.clone(),
+        stdout.clone(),
+        stderr.clone(),
+      )
+      .await;
+      match result {
+        ExecuteResult::Exit(exit_code, handles) => {
+          async_handles.extend(handles);
+          final_exit_code = exit_code;
+          was_exit = true;
+          break;
+        }
+        ExecuteResult::Continue(exit_code, changes, handles) => {
+          state.apply_changes(&changes);
+          state
+            .apply_env_var(OsStr::new("?"), OsStr::new(&exit_code.to_string()));
+          final_changes.extend(changes);
+          async_handles.extend(handles);
+          // use the final sequential item's exit code
+          final_exit_code = exit_code;
         }
       }
     }
-
-    // wait for async commands to complete
-    if async_command_behavior == AsyncCommandBehavior::Wait {
-      final_exit_code = wait_handles(
-        final_exit_code,
-        std::mem::take(&mut async_handles),
-        state.kill_signal(),
-        state.tree_exit_code_cell(),
-      )
-      .await;
-    }
-
-    if was_exit {
-      ExecuteResult::Exit(final_exit_code, async_handles)
-    } else {
-      ExecuteResult::Continue(final_exit_code, final_changes, async_handles)
-    }
   }
-  .boxed()
+
+  // wait for async commands to complete
+  if async_command_behavior == AsyncCommandBehavior::Wait {
+    final_exit_code = wait_handles(
+      final_exit_code,
+      std::mem::take(&mut async_handles),
+      state.kill_signal(),
+      state.tree_exit_code_cell(),
+    )
+    .await;
+  }
+
+  if was_exit {
+    ExecuteResult::Exit(final_exit_code, async_handles)
+  } else {
+    ExecuteResult::Continue(final_exit_code, final_changes, async_handles)
+  }
 }
 
 async fn wait_handles(
@@ -336,7 +329,7 @@ fn execute_sequence(
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
-) -> FutureExecuteResult {
+) -> BoxFuture<'static, ExecuteResult> {
   // requires boxed async because of recursive async
   async move {
     match sequence {
@@ -748,20 +741,20 @@ async fn execute_simple_command(
   execute_command_args(args, state, stdin, stdout, stderr).await
 }
 
-fn execute_command_args(
+pub(crate) async fn execute_command_args(
   mut args: Vec<OsString>,
   state: ShellState,
   stdin: ShellPipeReader,
   stdout: ShellPipeWriter,
   mut stderr: ShellPipeWriter,
-) -> FutureExecuteResult {
+) -> ExecuteResult {
   let command_name = if args.is_empty() {
     OsString::new()
   } else {
     args.remove(0)
   };
   if let Some(exit_code) = state.kill_signal().aborted_code() {
-    Box::pin(future::ready(ExecuteResult::from_exit_code(exit_code)))
+    ExecuteResult::from_exit_code(exit_code)
   } else if let Some(stripped_name) =
     command_name.to_string_lossy().strip_prefix('!')
   {
@@ -774,7 +767,7 @@ fn execute_command_args(
           "  ! {}",
         ), command_name.to_string_lossy(), stripped_name)
       );
-    Box::pin(future::ready(ExecuteResult::from_exit_code(1)))
+    ExecuteResult::from_exit_code(1)
   } else {
     let command_context = ShellCommandContext {
       args,
@@ -782,25 +775,19 @@ fn execute_command_args(
       stdin,
       stdout,
       stderr,
-      execute_command_args: Box::new(move |context| {
-        execute_command_args(
-          context.args,
-          context.state,
-          context.stdin,
-          context.stdout,
-          context.stderr,
-        )
-      }),
     };
     match command_context.state.resolve_custom_command(&command_name) {
-      Some(command) => command.execute(command_context),
-      None => execute_unresolved_command_name(
-        UnresolvedCommandName {
-          name: command_name,
-          base_dir: command_context.state.cwd().to_path_buf(),
-        },
-        command_context,
-      ),
+      Some(command) => command.execute(command_context).await,
+      None => {
+        execute_unresolved_command_name(
+          UnresolvedCommandName {
+            name: command_name,
+            base_dir: command_context.state.cwd().to_path_buf(),
+          },
+          command_context,
+        )
+        .await
+      }
     }
   }
 }
@@ -832,7 +819,8 @@ async fn evaluate_word(
   stderr: ShellPipeWriter,
 ) -> Result<OsString, EvaluateWordTextError> {
   let word_parts =
-  evaluate_word_parts(word.into_parts(), state.clone(), stdin, stderr).await?;
+    evaluate_word_parts(word.into_parts(), state.clone(), stdin, stderr)
+      .await?;
   Ok(os_string_join(&word_parts, " "))
 }
 
@@ -1135,14 +1123,14 @@ async fn evaluate_command_substitution(
   stderr: ShellPipeWriter,
 ) -> Result<OsString, FromUtf8Error> {
   let data = execute_with_stdout(|shell_stdout_writer| {
-    execute_sequential_list(
+    Box::pin(execute_sequential_list(
       list,
       state.clone(),
       stdin,
       shell_stdout_writer,
       stderr,
       AsyncCommandBehavior::Wait,
-    )
+    ))
   })
   .await;
 
@@ -1194,7 +1182,7 @@ fn trim_and_normalize_whitespaces_to_spaces(input: &[u8]) -> Vec<u8> {
 }
 
 async fn execute_with_stdout(
-  execute: impl FnOnce(ShellPipeWriter) -> FutureExecuteResult,
+  execute: impl FnOnce(ShellPipeWriter) -> BoxFuture<'static, ExecuteResult>,
 ) -> Vec<u8> {
   let (shell_stdout_reader, shell_stdout_writer) = pipe();
   let spawned_output = execute(shell_stdout_writer);

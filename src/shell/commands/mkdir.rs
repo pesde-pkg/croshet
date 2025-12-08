@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use futures::FutureExt;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 
-use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -19,18 +17,13 @@ use super::execute_with_cancellation;
 
 pub struct MkdirCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for MkdirCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> FutureExecuteResult {
-    async move {
-      execute_with_cancellation!(
-        mkdir_command(context.state.cwd(), &context.args, context.stderr),
-        context.state.kill_signal()
-      )
-    }
-    .boxed()
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    execute_with_cancellation!(
+      mkdir_command(context.state.cwd(), &context.args, context.stderr),
+      context.state.kill_signal()
+    )
   }
 }
 

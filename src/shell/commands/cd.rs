@@ -7,7 +7,6 @@ use std::path::PathBuf;
 
 use path_dedot::ParseDot;
 
-use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::EnvChange;
@@ -20,12 +19,10 @@ use super::args::parse_arg_kinds;
 
 pub struct CdCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for CdCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> FutureExecuteResult {
-    let result = match execute_cd(context.state.cwd(), &context.args) {
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
+    match execute_cd(context.state.cwd(), &context.args) {
       Ok(new_dir) => {
         ExecuteResult::Continue(0, vec![EnvChange::Cd(new_dir)], Vec::new())
       }
@@ -33,8 +30,7 @@ impl ShellCommand for CdCommand {
         let _ = context.stderr.write_line(&format!("cd: {err}"));
         ExecuteResult::Continue(1, Vec::new(), Vec::new())
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 

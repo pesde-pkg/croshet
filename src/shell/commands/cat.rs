@@ -4,9 +4,8 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 
-use crate::shell::types::ExecuteResult;
-use crate::FutureExecuteResult;
 use crate::Result;
+use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;
 use super::ShellCommandContext;
@@ -15,20 +14,17 @@ use super::args::parse_arg_kinds;
 
 pub struct CatCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for CatCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> FutureExecuteResult {
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
     let mut stderr = context.stderr.clone();
-    let result = match execute_cat(context) {
+    match execute_cat(context) {
       Ok(result) => result,
       Err(err) => {
         let _ = stderr.write_line(&format!("cat: {err}"));
         ExecuteResult::from_exit_code(1)
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 

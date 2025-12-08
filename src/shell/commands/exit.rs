@@ -2,7 +2,6 @@
 
 use std::ffi::OsString;
 
-use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -14,19 +13,16 @@ use super::args::parse_arg_kinds;
 
 pub struct ExitCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for ExitCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> FutureExecuteResult {
-    let result = match execute_exit(&context.args) {
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
+    match execute_exit(&context.args) {
       Ok(code) => ExecuteResult::Exit(code, Vec::new()),
       Err(err) => {
         context.stderr.write_line(&format!("exit: {err}")).unwrap();
         ExecuteResult::Exit(2, Vec::new())
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 

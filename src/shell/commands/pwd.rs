@@ -4,7 +4,6 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use crate::Context;
-use crate::FutureExecuteResult;
 use crate::Result;
 use crate::shell::types::ExecuteResult;
 
@@ -15,12 +14,10 @@ use super::args::parse_arg_kinds;
 
 pub struct PwdCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for PwdCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> FutureExecuteResult {
-    let result = match execute_pwd(context.state.cwd(), &context.args) {
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
+    match execute_pwd(context.state.cwd(), &context.args) {
       Ok(output) => {
         let _ = context.stdout.write_line(&output);
         ExecuteResult::from_exit_code(0)
@@ -29,8 +26,7 @@ impl ShellCommand for PwdCommand {
         let _ = context.stderr.write_line(&format!("pwd: {err}"));
         ExecuteResult::from_exit_code(1)
       }
-    };
-    Box::pin(futures::future::ready(result))
+    }
   }
 }
 

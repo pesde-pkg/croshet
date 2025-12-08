@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use crate::FutureExecuteResult;
 use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;
@@ -8,11 +7,9 @@ use super::ShellCommandContext;
 
 pub struct EchoCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for EchoCommand {
-  fn execute(
-    &self,
-    mut context: ShellCommandContext,
-  ) -> FutureExecuteResult {
+  async fn execute(&self, mut context: ShellCommandContext) -> ExecuteResult {
     let iter = context
       .args
       .iter()
@@ -28,7 +25,8 @@ impl ShellCommand for EchoCommand {
         }
       })
       .chain(Box::new(std::iter::once("\n".as_bytes())));
+
     _ = context.stdout.write_all_iter(iter);
-    Box::pin(futures::future::ready(ExecuteResult::from_exit_code(0)))
+    ExecuteResult::from_exit_code(0)
   }
 }

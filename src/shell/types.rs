@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering;
 
-use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use soft_canonicalize::soft_canonicalize;
 use thiserror::Error;
@@ -284,8 +283,6 @@ pub enum EnvChange {
   UnsetVar(OsString),
   Cd(PathBuf),
 }
-
-pub type FutureExecuteResult = BoxFuture<'static, ExecuteResult>;
 
 #[derive(Debug)]
 pub enum ExecuteResult {

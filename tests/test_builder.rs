@@ -21,17 +21,18 @@ use tokio::task::JoinHandle;
 
 use croshet::ExecuteResult;
 
-type FnShellCommandExecute =
-  Box<dyn Fn(ShellCommandContext) -> BoxFuture<'static, ExecuteResult> + Send + Sync>;
+type FnShellCommandExecute = Box<
+  dyn Fn(ShellCommandContext) -> BoxFuture<'static, ExecuteResult>
+    + Send
+    + Sync,
+>;
 
 struct FnShellCommand(FnShellCommandExecute);
 
+#[async_trait::async_trait]
 impl ShellCommand for FnShellCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> BoxFuture<'static, ExecuteResult> {
-    (self.0)(context)
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    (self.0)(context).await
   }
 }
 

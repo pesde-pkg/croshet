@@ -3,10 +3,8 @@
 use std::path::PathBuf;
 
 use crate::ExecuteResult;
-use crate::FutureExecuteResult;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
-use futures::FutureExt;
 
 /// Command that resolves the command name and
 /// executes it in a separate process.
@@ -24,77 +22,73 @@ impl ExecutableCommand {
   }
 }
 
+#[async_trait::async_trait]
 impl ShellCommand for ExecutableCommand {
-  fn execute(&self, context: ShellCommandContext) -> FutureExecuteResult {
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
     let display_name = self.display_name.clone();
     let command_name = self.command_path.clone();
-    async move {
-      // don't spawn if already aborted
-      if let Some(exit_code) = context.state.kill_signal().aborted_code() {
-        return ExecuteResult::from_exit_code(exit_code);
+    // don't spawn if already aborted
+    if let Some(exit_code) = context.state.kill_signal().aborted_code() {
+      return ExecuteResult::from_exit_code(exit_code);
+    }
+
+    let mut stderr = context.stderr;
+    let mut sub_command = tokio::process::Command::new(&command_name);
+    let child = sub_command
+      .current_dir(context.state.cwd())
+      .args(context.args)
+      .env_clear()
+      .envs(context.state.env_vars())
+      .stdout(context.stdout.into_stdio())
+      .stdin(context.stdin.into_stdio())
+      .stderr(stderr.clone().into_stdio())
+      .spawn();
+
+    let mut child = match child {
+      Ok(child) => child,
+      Err(err) => {
+        let _ = stderr
+          .write_line(&format!("Error launching '{}': {}", display_name, err));
+        return ExecuteResult::from_exit_code(1);
       }
+    };
 
-      let mut stderr = context.stderr;
-      let mut sub_command = tokio::process::Command::new(&command_name);
-      let child = sub_command
-        .current_dir(context.state.cwd())
-        .args(context.args)
-        .env_clear()
-        .envs(context.state.env_vars())
-        .stdout(context.stdout.into_stdio())
-        .stdin(context.stdin.into_stdio())
-        .stderr(stderr.clone().into_stdio())
-        .spawn();
+    context.state.track_child_process(&child);
 
-      let mut child = match child {
-        Ok(child) => child,
-        Err(err) => {
-          let _ = stderr.write_line(&format!(
-            "Error launching '{}': {}",
-            display_name, err
-          ));
-          return ExecuteResult::from_exit_code(1);
-        }
-      };
+    // avoid deadlock since this is holding onto the pipes
+    drop(sub_command);
 
-      context.state.track_child_process(&child);
+    loop {
+      tokio::select! {
+        result = child.wait() => match result {
+          Ok(status) => return ExecuteResult::Continue(
+            status.code().unwrap_or(1),
+            Vec::new(),
+            Vec::new(),
+          ),
+          Err(err) => {
+            let _ = stderr.write_line(&format!("{}", err));
+            return ExecuteResult::from_exit_code(1);
+          }
+        },
+        signal = context.state.kill_signal().wait_any() => {
+          // the conditional unix kill isnt present on non-unix and this if statement becomes collapsible
+          #[cfg_attr(not(unix), allow(clippy::collapsible_if))]
+          if let Some(_id) = child.id() {
+            #[cfg(unix)]
+            kill(_id as i32, signal);
 
-      // avoid deadlock since this is holding onto the pipes
-      drop(sub_command);
-
-      loop {
-        tokio::select! {
-          result = child.wait() => match result {
-            Ok(status) => return ExecuteResult::Continue(
-              status.code().unwrap_or(1),
-              Vec::new(),
-              Vec::new(),
-            ),
-            Err(err) => {
-              let _ = stderr.write_line(&format!("{}", err));
-              return ExecuteResult::from_exit_code(1);
-            }
-          },
-          signal = context.state.kill_signal().wait_any() => {
-            // the conditional unix kill isnt present on non-unix and this if statement becomes collapsible
-            #[cfg_attr(not(unix), allow(clippy::collapsible_if))]
-            if let Some(_id) = child.id() {
-              #[cfg(unix)]
-              kill(_id as i32, signal);
-
-              if cfg!(not(unix)) && signal.causes_abort() {
-                let _ = child.start_kill();
-                let status = child.wait().await.ok();
-                return ExecuteResult::from_exit_code(
-                  status.and_then(|s| s.code()).unwrap_or(signal.aborted_code()),
-                );
-              }
+            if cfg!(not(unix)) && signal.causes_abort() {
+              let _ = child.start_kill();
+              let status = child.wait().await.ok();
+              return ExecuteResult::from_exit_code(
+                status.and_then(|s| s.code()).unwrap_or(signal.aborted_code()),
+              );
             }
           }
         }
       }
     }
-    .boxed()
   }
 }
 

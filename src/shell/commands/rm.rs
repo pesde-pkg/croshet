@@ -5,9 +5,6 @@ use std::ffi::OsString;
 use std::io::ErrorKind;
 use std::path::Path;
 
-use futures::FutureExt;
-
-use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -21,18 +18,13 @@ use super::execute_with_cancellation;
 
 pub struct RmCommand;
 
+#[async_trait::async_trait]
 impl ShellCommand for RmCommand {
-  fn execute(
-    &self,
-    context: ShellCommandContext,
-  ) -> FutureExecuteResult {
-    async move {
-      execute_with_cancellation!(
-        rm_command(context.state.cwd(), &context.args, context.stderr),
-        context.state.kill_signal()
-      )
-    }
-    .boxed()
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult {
+    execute_with_cancellation!(
+      rm_command(context.state.cwd(), &context.args, context.stderr),
+      context.state.kill_signal()
+    )
   }
 }
 

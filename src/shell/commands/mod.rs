@@ -22,8 +22,9 @@ use std::sync::Arc;
 
 pub use executable::ExecutableCommand;
 
+use crate::shell;
+
 use super::types::ExecuteResult;
-use super::types::FutureExecuteResult;
 use super::types::ShellPipeReader;
 use super::types::ShellPipeWriter;
 use super::types::ShellState;
@@ -111,12 +112,26 @@ pub struct ShellCommandContext {
   pub stdin: ShellPipeReader,
   pub stdout: ShellPipeWriter,
   pub stderr: ShellPipeWriter,
-  pub execute_command_args:
-    Box<dyn FnOnce(ExecuteCommandArgsContext) -> FutureExecuteResult + Send>,
 }
 
+impl ShellCommandContext {
+  pub async fn execute_command_args(
+    context: ExecuteCommandArgsContext,
+  ) -> ExecuteResult {
+    shell::execute::execute_command_args(
+      context.args,
+      context.state,
+      context.stdin,
+      context.stdout,
+      context.stderr,
+    )
+    .await
+  }
+}
+
+#[async_trait::async_trait]
 pub trait ShellCommand: Send + Sync {
-  fn execute(&self, context: ShellCommandContext) -> FutureExecuteResult;
+  async fn execute(&self, context: ShellCommandContext) -> ExecuteResult;
 }
 
 macro_rules! execute_with_cancellation {
@@ -136,11 +151,10 @@ pub(super) use execute_with_cancellation;
 
 struct ExitCodeCommand(i32);
 
+#[async_trait::async_trait]
 impl ShellCommand for ExitCodeCommand {
-  fn execute(&self, _context: ShellCommandContext) -> FutureExecuteResult {
+  async fn execute(&self, _context: ShellCommandContext) -> ExecuteResult {
     // ignores additional arguments
-    Box::pin(futures::future::ready(ExecuteResult::from_exit_code(
-      self.0,
-    )))
+    ExecuteResult::from_exit_code(self.0)
   }
 }
