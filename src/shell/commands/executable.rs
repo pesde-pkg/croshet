@@ -94,7 +94,7 @@ impl ShellCommand for ExecutableCommand {
         }
       }
     }
-    .boxed_local()
+    .boxed()
   }
 }
 

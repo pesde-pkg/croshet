@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use futures::future::LocalBoxFuture;
 use std::ffi::OsString;
 use std::path::Path;
 
 use crate::Context;
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::shell::types::ExecuteResult;
 
@@ -19,7 +19,7 @@ impl ShellCommand for PwdCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let result = match execute_pwd(context.state.cwd(), &context.args) {
       Ok(output) => {
         let _ = context.stdout.write_line(&output);

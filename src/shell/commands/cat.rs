@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use crate::Result;
-use futures::future::LocalBoxFuture;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 
 use crate::shell::types::ExecuteResult;
+use crate::FutureExecuteResult;
+use crate::Result;
 
 use super::ShellCommand;
 use super::ShellCommandContext;
@@ -19,7 +19,7 @@ impl ShellCommand for CatCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let mut stderr = context.stderr.clone();
     let result = match execute_cat(context) {
       Ok(result) => result,

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
 use futures::FutureExt;
-use futures::future::LocalBoxFuture;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -23,14 +23,14 @@ impl ShellCommand for MkdirCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     async move {
       execute_with_cancellation!(
         mkdir_command(context.state.cwd(), &context.args, context.stderr),
         context.state.kill_signal()
       )
     }
-    .boxed_local()
+    .boxed()
   }
 }
 

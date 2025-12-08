@@ -2,9 +2,8 @@
 
 use std::ffi::OsString;
 
-use futures::future::LocalBoxFuture;
-
 use crate::EnvChange;
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -18,7 +17,7 @@ impl ShellCommand for UnsetCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+    ) -> FutureExecuteResult {
     let result = match parse_names(context.args) {
       Ok(names) => ExecuteResult::Continue(
         0,

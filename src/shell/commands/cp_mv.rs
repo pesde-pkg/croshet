@@ -7,9 +7,9 @@ use std::path::PathBuf;
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
-use futures::future::LocalBoxFuture;
 
 use crate::Context;
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -27,14 +27,14 @@ impl ShellCommand for CpCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     async move {
       execute_with_cancellation!(
         cp_command(context.state.cwd(), &context.args, context.stderr),
         context.state.kill_signal()
       )
     }
-    .boxed_local()
+    .boxed()
   }
 }
 
@@ -172,14 +172,14 @@ impl ShellCommand for MvCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     async move {
       execute_with_cancellation!(
         mv_command(context.state.cwd(), &context.args, context.stderr),
         context.state.kill_signal()
       )
     }
-    .boxed_local()
+    .boxed()
   }
 }
 

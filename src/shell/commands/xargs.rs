@@ -3,9 +3,9 @@
 use std::ffi::OsString;
 
 use futures::FutureExt;
-use futures::future::LocalBoxFuture;
 
 use crate::ExecuteCommandArgsContext;
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -22,7 +22,7 @@ impl ShellCommand for XargsCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     async move {
       match xargs_collect_args(&context.args, context.stdin.clone()) {
         Ok(args) => {
@@ -42,7 +42,7 @@ impl ShellCommand for XargsCommand {
         }
       }
     }
-    .boxed_local()
+    .boxed()
   }
 }
 

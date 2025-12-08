@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::Context;
 use croshet::ExecuteOptionsBuilder;
@@ -15,14 +15,14 @@ use croshet::ShellPipeWriter;
 use croshet::execute;
 use croshet::parser::parse;
 use croshet::pipe;
-use futures::future::LocalBoxFuture;
+use futures::future::BoxFuture;
 use pretty_assertions::assert_eq;
 use tokio::task::JoinHandle;
 
 use croshet::ExecuteResult;
 
 type FnShellCommandExecute =
-  Box<dyn Fn(ShellCommandContext) -> LocalBoxFuture<'static, ExecuteResult>>;
+  Box<dyn Fn(ShellCommandContext) -> BoxFuture<'static, ExecuteResult> + Send + Sync>;
 
 struct FnShellCommand(FnShellCommandExecute);
 
@@ -30,7 +30,7 @@ impl ShellCommand for FnShellCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> BoxFuture<'static, ExecuteResult> {
     (self.0)(context)
   }
 }
@@ -66,7 +66,7 @@ pub struct TestBuilder {
   // it is much much faster to lazily create this
   temp_dir: Option<TempDir>,
   env_vars: HashMap<String, String>,
-  custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+  custom_commands: HashMap<String, Arc<dyn ShellCommand>>,
   command: String,
   kill_signal: KillSignal,
   stdin: Vec<u8>,
@@ -168,7 +168,7 @@ impl TestBuilder {
   ) -> &mut Self {
     self
       .custom_commands
-      .insert(name.to_string(), Rc::new(FnShellCommand(execute)));
+      .insert(name.to_string(), Arc::new(FnShellCommand(execute)));
     self
   }
 

@@ -5,12 +5,12 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::string::FromUtf8Error;
 
 use futures::FutureExt;
 use futures::future;
-use futures::future::LocalBoxFuture;
+use futures::future::BoxFuture;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -94,7 +94,7 @@ pub struct ExecuteOptions {
   /// **Warning**: This option is mandatory and *cannot* be an empty `PathBuf`.
   pub cwd: PathBuf,
   /// Custom shell commands mapped by name.
-  pub custom_commands: HashMap<String, Rc<dyn ShellCommand>>,
+  pub custom_commands: HashMap<String, Arc<dyn ShellCommand>>,
   /// Signal sent to kill the process.
   pub kill_signal: KillSignal,
   /// Reader for the standard input pipe.
@@ -173,7 +173,7 @@ impl ExecuteOptionsBuilder {
 
   pub fn custom_commands(
     mut self,
-    commands: HashMap<String, Rc<dyn ShellCommand>>,
+    commands: HashMap<String, Arc<dyn ShellCommand>>,
   ) -> Self {
     self.0.custom_commands.extend(commands);
     self
@@ -300,7 +300,7 @@ fn execute_sequential_list(
       ExecuteResult::Continue(final_exit_code, final_changes, async_handles)
     }
   }
-  .boxed_local()
+  .boxed()
 }
 
 async fn wait_handles(
@@ -416,7 +416,7 @@ fn execute_sequence(
       }
     }
   }
-  .boxed_local()
+  .boxed()
 }
 
 async fn execute_pipeline(
@@ -523,7 +523,7 @@ async fn resolve_redirect_word_pipe(
 
   let words = evaluate_word_parts(
     word.into_parts(),
-    state,
+    state.clone(),
     stdin.clone(),
     stderr.clone(),
   )
@@ -815,7 +815,7 @@ pub async fn evaluate_args(
   for arg in args {
     let parts = evaluate_word_parts(
       arg.into_parts(),
-      state,
+      state.clone(),
       stdin.clone(),
       stderr.clone(),
     )
@@ -832,7 +832,7 @@ async fn evaluate_word(
   stderr: ShellPipeWriter,
 ) -> Result<OsString, EvaluateWordTextError> {
   let word_parts =
-    evaluate_word_parts(word.into_parts(), state, stdin, stderr).await?;
+  evaluate_word_parts(word.into_parts(), state.clone(), stdin, stderr).await?;
   Ok(os_string_join(&word_parts, " "))
 }
 
@@ -865,10 +865,10 @@ impl EvaluateWordTextError {
 
 fn evaluate_word_parts(
   parts: Vec<WordPart>,
-  state: &ShellState,
+  state: ShellState,
   stdin: ShellPipeReader,
   stderr: ShellPipeWriter,
-) -> LocalBoxFuture<'_, Result<Vec<OsString>, EvaluateWordTextError>> {
+) -> BoxFuture<'static, Result<Vec<OsString>, EvaluateWordTextError>> {
   #[derive(Debug)]
   enum TextPart {
     Quoted(OsString),
@@ -988,10 +988,10 @@ fn evaluate_word_parts(
   fn evaluate_word_parts_inner(
     parts: Vec<WordPart>,
     is_quoted: bool,
-    state: &ShellState,
+    state: ShellState,
     stdin: ShellPipeReader,
     stderr: ShellPipeWriter,
-  ) -> LocalBoxFuture<'_, Result<Vec<OsString>, EvaluateWordTextError>> {
+  ) -> BoxFuture<'static, Result<Vec<OsString>, EvaluateWordTextError>> {
     // recursive async, so requires boxing
     async move {
       let mut result = Vec::new();
@@ -1004,7 +1004,7 @@ fn evaluate_word_parts(
           }
           WordPart::Variable(name) => state.get_var(OsStr::new(&name)).cloned(),
           WordPart::Tilde => Some(
-            sys_traits::impls::real_home_dir_with_env(state)
+            sys_traits::impls::real_home_dir_with_env(&state)
               .map(|s| s.into_os_string())
               .ok_or(EvaluateWordTextError::NoHomeDirectory)?,
           ),
@@ -1034,7 +1034,7 @@ fn evaluate_word_parts(
               result.extend(
                 evaluate_args(
                   expanded_positionals,
-                  state,
+                  &state,
                   stdin.clone(),
                   stderr.clone(),
                 )
@@ -1046,7 +1046,7 @@ fn evaluate_word_parts(
             let parts = evaluate_word_parts_inner(
               parts,
               true,
-              state,
+              state.clone(),
               stdin.clone(),
               stderr.clone(),
             )
@@ -1071,7 +1071,7 @@ fn evaluate_word_parts(
               evaluate_word_parts_inner(
                 expanded_positionals,
                 is_quoted,
-                state,
+                state.clone(),
                 stdin.clone(),
                 stderr.clone(),
               )
@@ -1096,7 +1096,7 @@ fn evaluate_word_parts(
             if !parts.is_empty() {
               // evaluate and store the current text
               result.extend(evaluate_word_text(
-                state,
+                &state,
                 current_text,
                 is_quoted,
               )?);
@@ -1104,7 +1104,7 @@ fn evaluate_word_parts(
               // store all the parts except the last one
               for part in parts.drain(..parts.len() - 1) {
                 result.extend(evaluate_word_text(
-                  state,
+                  &state,
                   vec![part],
                   is_quoted,
                 )?);
@@ -1118,14 +1118,14 @@ fn evaluate_word_parts(
         }
       }
       if !current_text.is_empty() {
-        result.extend(evaluate_word_text(state, current_text, is_quoted)?);
+        result.extend(evaluate_word_text(&state, current_text, is_quoted)?);
       }
       Ok(result)
     }
-    .boxed_local()
+    .boxed()
   }
 
-  evaluate_word_parts_inner(parts, false, state, stdin, stderr)
+  evaluate_word_parts_inner(parts, false, state.clone(), stdin, stderr)
 }
 
 async fn evaluate_command_substitution(

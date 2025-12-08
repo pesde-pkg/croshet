@@ -5,9 +5,8 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::Read;
 
-use futures::future::LocalBoxFuture;
-
 use crate::ExecuteResult;
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
@@ -24,7 +23,7 @@ impl ShellCommand for HeadCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let mut stderr = context.stderr.clone();
     let result = match execute_head(context) {
       Ok(result) => result,

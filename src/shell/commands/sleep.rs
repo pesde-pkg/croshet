@@ -4,8 +4,8 @@ use std::ffi::OsString;
 use std::time::Duration;
 
 use futures::FutureExt;
-use futures::future::LocalBoxFuture;
 
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -23,14 +23,14 @@ impl ShellCommand for SleepCommand {
   fn execute(
     &self,
     context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     async move {
       execute_with_cancellation!(
         sleep_command(&context.args, context.stderr),
         context.state.kill_signal()
       )
     }
-    .boxed_local()
+    .boxed()
   }
 }
 

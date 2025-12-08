@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT AND MPL-2.0
 
-use futures::future::LocalBoxFuture;
-
+use crate::FutureExecuteResult;
 use crate::shell::types::ExecuteResult;
 
 use super::ShellCommand;
@@ -13,7 +12,7 @@ impl ShellCommand for EchoCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let iter = context
       .args
       .iter()

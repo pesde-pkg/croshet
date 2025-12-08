@@ -5,9 +5,9 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 
-use futures::future::LocalBoxFuture;
 use path_dedot::ParseDot;
 
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::EnvChange;
@@ -24,7 +24,7 @@ impl ShellCommand for CdCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let result = match execute_cd(context.state.cwd(), &context.args) {
       Ok(new_dir) => {
         ExecuteResult::Continue(0, vec![EnvChange::Cd(new_dir)], Vec::new())

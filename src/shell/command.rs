@@ -18,6 +18,9 @@ use crate::FutureExecuteResult;
 use crate::Result;
 use crate::ShellCommand;
 use crate::ShellCommandContext;
+use crate::ShellPipeReader;
+use crate::ShellPipeWriter;
+use crate::ShellState;
 
 use super::which::CommandPathResolutionError;
 use super::which::resolve_command_path;
@@ -33,11 +36,14 @@ pub fn execute_unresolved_command_name(
   mut context: ShellCommandContext,
 ) -> FutureExecuteResult {
   async move {
+    let mut stderr = context.stderr.clone();
+    let args = context.args.clone();
+
     let command =
-      match resolve_command(&command_name, &context, &context.args).await {
+      match resolve_command(&command_name, context.state.clone(), context.stdin.clone(), stderr.clone(), &args).await {
         Ok(command_path) => command_path,
         Err(ResolveCommandError::CommandPath(err)) => {
-          let _ = context.stderr.write_line(&format!("{}", err));
+          let _ = stderr.write_line(&format!("{}", err));
           return ExecuteResult::Continue(
             err.exit_code(),
             Vec::new(),
@@ -45,7 +51,7 @@ pub fn execute_unresolved_command_name(
           );
         }
         Err(ResolveCommandError::FailedShebang(err)) => {
-          let _ = context.stderr.write_line(&format!(
+          let _ = stderr.write_line(&format!(
             "{}: {}",
             command_name.name.to_string_lossy(),
             err
@@ -72,7 +78,7 @@ pub fn execute_unresolved_command_name(
       }
     }
   }
-  .boxed_local()
+  .boxed()
 }
 
 enum CommandName {
@@ -112,13 +118,15 @@ impl FailedShebangError {
 
 async fn resolve_command<'a>(
   command_name: &UnresolvedCommandName,
-  context: &ShellCommandContext,
+  state: ShellState,
+  stdin: ShellPipeReader,
+  stderr: ShellPipeWriter,
   original_args: &'a [OsString],
 ) -> Result<ResolvedCommand<'a>, ResolveCommandError> {
   let command_path = match resolve_command_path(
     &command_name.name,
     &command_name.base_dir,
-    &context.state,
+    &state,
   ) {
     Ok(command_path) => command_path,
     Err(err) => return Err(err.into()),
@@ -133,7 +141,7 @@ async fn resolve_command<'a>(
     })?
   {
     let (shebang_command_name, mut args) = if shebang.string_split {
-      let mut args = parse_shebang_args(&shebang.command, context)
+      let mut args = parse_shebang_args(&shebang.command, state, stdin, stderr)
         .await
         .map_err(FailedShebangError::Any)?;
       args.push(command_path.clone().into_os_string());
@@ -162,7 +170,9 @@ async fn resolve_command<'a>(
 
 async fn parse_shebang_args(
   text: &str,
-  context: &ShellCommandContext,
+  state: ShellState,
+  stdin: ShellPipeReader,
+  stderr: ShellPipeWriter,
 ) -> Result<Vec<OsString>> {
   fn err_unsupported(text: &str) -> Result<Vec<OsString>> {
     crate::bail!(
@@ -205,9 +215,9 @@ async fn parse_shebang_args(
 
   super::execute::evaluate_args(
     cmd.args,
-    &context.state,
-    context.stdin.clone(),
-    context.stderr.clone(),
+    &state,
+    stdin,
+    stderr
   )
   .await
   .map_err(|err| Error::from(anyhow::Error::from(err)))

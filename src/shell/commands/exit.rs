@@ -2,8 +2,7 @@
 
 use std::ffi::OsString;
 
-use futures::future::LocalBoxFuture;
-
+use crate::FutureExecuteResult;
 use crate::Result;
 use crate::bail;
 use crate::shell::types::ExecuteResult;
@@ -19,7 +18,7 @@ impl ShellCommand for ExitCommand {
   fn execute(
     &self,
     mut context: ShellCommandContext,
-  ) -> LocalBoxFuture<'static, ExecuteResult> {
+  ) -> FutureExecuteResult {
     let result = match execute_exit(&context.args) {
       Ok(code) => ExecuteResult::Exit(code, Vec::new()),
       Err(err) => {
