@@ -151,7 +151,7 @@ fn parse_args<'a>(args: &'a [OsString]) -> Result<HeadFlags<'a>> {
           bail!("expected a value for --lines");
         } else if let Some(arg) = flag.strip_prefix("lines=") {
           lines =
-            Some(arg.parse::<u64>().map_err(|err| anyhow::Error::from(err))?);
+            Some(arg.parse::<u64>().map_err(anyhow::Error::from)?);
         } else {
           arg.bail_unsupported()?
         }

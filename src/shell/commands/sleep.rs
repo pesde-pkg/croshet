@@ -55,7 +55,7 @@ async fn execute_sleep(args: &[OsString]) -> Result<()> {
 
 fn parse_arg(arg: &str) -> Result<f64, std::num::ParseFloatError> {
   if let Some(t) = arg.strip_suffix('s') {
-    return Ok(t.parse()?);
+    return t.parse();
   }
   if let Some(t) = arg.strip_suffix('m') {
     return Ok(t.parse::<f64>()? * 60.);
@@ -67,7 +67,7 @@ fn parse_arg(arg: &str) -> Result<f64, std::num::ParseFloatError> {
     return Ok(t.parse::<f64>()? * 60. * 60. * 24.);
   }
 
-  Ok(arg.parse()?)
+  arg.parse()
 }
 
 fn parse_args(args: &[OsString]) -> Result<u64> {

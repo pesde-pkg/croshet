@@ -1280,8 +1280,8 @@ async fn stdin() {
 
             let mut buf = [0u8, byte_count];
             let n = context.stdin.read(&mut buf)?;
-            for i in 0..n {
-              context.stdout.write_line(&format!("{}", buf[i]))?;
+            for b in buf.iter().take(n) {
+              context.stdout.write_line(&format!("{}", b))?;
             }
 
             // If less than 2 bytes were available, have send an error code
@@ -1299,7 +1299,7 @@ async fn stdin() {
           Err(err) => {
             context
               .stderr
-              .write_line(&format!("read-bytes: {}", err.to_string()))
+              .write_line(&format!("read-bytes: {}", err))
               .unwrap();
             ExecuteResult::from_exit_code(1)
           }
