@@ -479,7 +479,9 @@ async fn pipeline() {
   TestBuilder::new()
     .file("init.luau", stdout_forward)
     .command(
-      "echo $(sleep 0.1 && echo 2 & echo 1) | lune run .".to_string().as_str(),
+      "echo $(sleep 0.1 && echo 2 & echo 1) | lune run ."
+        .to_string()
+        .as_str(),
     )
     .assert_stdout("1 2\n")
     .run()

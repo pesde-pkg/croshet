@@ -31,54 +31,46 @@ pub async fn execute_unresolved_command_name(
   command_name: UnresolvedCommandName,
   mut context: ShellCommandContext,
 ) -> ExecuteResult {
-    let mut stderr = context.stderr.clone();
-    let args = context.args.clone();
+  let mut stderr = context.stderr.clone();
+  let args = context.args.clone();
 
-    let command = match resolve_command(
-      &command_name,
-      context.state.clone(),
-      context.stdin.clone(),
-      stderr.clone(),
-      &args,
-    )
-    .await
-    {
-      Ok(command_path) => command_path,
-      Err(ResolveCommandError::CommandPath(err)) => {
-        let _ = stderr.write_line(&format!("{}", err));
-        return ExecuteResult::Continue(
-          err.exit_code(),
-          Vec::new(),
-          Vec::new(),
-        );
-      }
-      Err(ResolveCommandError::FailedShebang(err)) => {
-        let _ = stderr.write_line(&format!(
-          "{}: {}",
-          command_name.name.to_string_lossy(),
-          err
-        ));
-        return ExecuteResult::Continue(
-          err.exit_code(),
-          Vec::new(),
-          Vec::new(),
-        );
-      }
-    };
-    match command.command_name {
-      CommandName::Resolved(path) => {
-        ExecutableCommand::new(
-          command_name.name.to_string_lossy().into_owned(),
-          path,
-        )
-        .execute(context)
-        .await
-      }
-      CommandName::Unresolved(command_name) => {
-        context.args = command.args.into_owned();
-        Box::pin(execute_unresolved_command_name(command_name, context)).await
-      }
+  let command = match resolve_command(
+    &command_name,
+    context.state.clone(),
+    context.stdin.clone(),
+    stderr.clone(),
+    &args,
+  )
+  .await
+  {
+    Ok(command_path) => command_path,
+    Err(ResolveCommandError::CommandPath(err)) => {
+      let _ = stderr.write_line(&format!("{}", err));
+      return ExecuteResult::Continue(err.exit_code(), Vec::new(), Vec::new());
     }
+    Err(ResolveCommandError::FailedShebang(err)) => {
+      let _ = stderr.write_line(&format!(
+        "{}: {}",
+        command_name.name.to_string_lossy(),
+        err
+      ));
+      return ExecuteResult::Continue(err.exit_code(), Vec::new(), Vec::new());
+    }
+  };
+  match command.command_name {
+    CommandName::Resolved(path) => {
+      ExecutableCommand::new(
+        command_name.name.to_string_lossy().into_owned(),
+        path,
+      )
+      .execute(context)
+      .await
+    }
+    CommandName::Unresolved(command_name) => {
+      context.args = command.args.into_owned();
+      Box::pin(execute_unresolved_command_name(command_name, context)).await
+    }
+  }
 }
 
 enum CommandName {
