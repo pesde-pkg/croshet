@@ -3,6 +3,7 @@
 #![deny(clippy::print_stderr)]
 #![deny(clippy::print_stdout)]
 #![deny(clippy::unused_async)]
+#![deny(clippy::future_not_send)]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 
 pub mod parser;
