@@ -1160,7 +1160,7 @@ mod test {
     assert!(parse("command --arg='value'").is_ok());
     assert!(parse("command --arg=\"value\"").is_ok());
     assert!(
-      parse("deno run --allow-read=. --allow-write=./testing main.ts").is_ok(),
+      parse("lune run . --arg=value").is_ok(),
     );
   }
 
@@ -1626,7 +1626,7 @@ mod test {
 
     run_test(
       parse_quoted_string,
-      r#""test $(deno eval 'console.info("test")') test `backticks "test"` test""#,
+      r#""test $(echo 'console.info("test")' | lune run -) test `backticks "test"` test""#,
       Ok(vec![
         WordPart::Text("test ".to_string()),
         WordPart::Command(SequentialList {
@@ -1639,9 +1639,9 @@ mod test {
                 inner: CommandInner::Simple(SimpleCommand {
                   env_vars: vec![],
                   args: Vec::from([
-                    Word::new_word("deno"),
-                    Word::new_word("eval"),
-                    Word::new_string("console.info(\"test\")"),
+                    Word::new_word("lune"),
+                    Word::new_word("run"),
+                    Word::new_string("test.luau"),
                   ]),
                 }),
               }),

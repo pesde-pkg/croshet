@@ -415,7 +415,7 @@ impl ShellPipeReader {
       // Don't lock stdout/stderr here because we want to release the lock
       // when reading from the sending pipe. Additionally, we want
       // to flush after every write because Rust's wrapper has an
-      // internal buffer and Deno doesn't buffer stdout/stderr.
+      // internal buffer and we don't buffer stdout/stderr.
       ShellPipeWriter::Stdout => {
         self.pipe_to_with_flushing(&mut std::io::stdout())
       }

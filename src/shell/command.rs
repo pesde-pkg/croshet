@@ -168,7 +168,7 @@ async fn parse_shebang_args(
 ) -> Result<Vec<OsString>> {
   fn err_unsupported(text: &str) -> Result<Vec<OsString>> {
     crate::bail!(
-      "unsupported shebang. Please report this as a bug (https://github.com/denoland/deno).\n\nShebang: {}",
+      "unsupported shebang. Please report this as a bug (https://github.com/pesde-pkg/croshet).\n\nShebang: {}",
       text
     )
   }

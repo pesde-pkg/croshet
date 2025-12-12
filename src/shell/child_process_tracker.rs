@@ -5,7 +5,7 @@ use crate::Result;
 use tokio::process::Child;
 
 /// Windows does not have a concept of parent processes and so
-/// killing the deno task process will not also kill any spawned
+/// killing the croshet task process will not also kill any spawned
 /// processes by default. To make this work, we can use winapi's
 /// jobs api, which allows for associating a main process so that
 /// when the main process terminates, it will also terminate the
