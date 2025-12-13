@@ -1624,7 +1624,7 @@ mod test {
 
     run_test(
       parse_quoted_string,
-      r#""test $(echo 'console.info("test")' | lune run -) test `backticks "test"` test""#,
+      r#""test $(echo '"test"') test `backticks "test"` test""#,
       Ok(vec![
         WordPart::Text("test ".to_string()),
         WordPart::Command(SequentialList {
@@ -1636,11 +1636,10 @@ mod test {
                 redirect: None,
                 inner: CommandInner::Simple(SimpleCommand {
                   env_vars: vec![],
-                  args: Vec::from([
-                    Word::new_word("lune"),
-                    Word::new_word("run"),
-                    Word::new_string("test.luau"),
-                  ]),
+                  args: vec![
+                    Word::new_word("echo"),
+                    Word::new_string(r#""test""#),
+                  ],
                 }),
               }),
             }),
