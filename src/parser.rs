@@ -1159,9 +1159,7 @@ mod test {
     assert!(parse("( test ||other&&test;test);(t&est );").is_ok());
     assert!(parse("command --arg='value'").is_ok());
     assert!(parse("command --arg=\"value\"").is_ok());
-    assert!(
-      parse("lune run . --arg=value").is_ok(),
-    );
+    assert!(parse("lune run . --arg=value").is_ok(),);
   }
 
   #[test]

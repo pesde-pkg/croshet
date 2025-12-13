@@ -64,7 +64,7 @@ fn parse_args(args: &[OsString]) -> Result<&OsStr> {
     bail!("too many arguments")
   } else if paths.is_empty() {
     // not the case in actual cd, but it is most likely
-    // an error if someone does this in pesde script 
+    // an error if someone does this in pesde script
     bail!("expected at least 1 argument")
   }
 
