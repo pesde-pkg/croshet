@@ -62,6 +62,32 @@ impl TempDir {
   }
 }
 
+macro_rules! assert_eq_wildcard {
+    ($actual:expr, $expected:expr $(, $($arg:tt)+ )?) => {{
+        let actual = $actual;
+        let expected = $expected;
+
+        if !expected.contains(".*") {
+            assert_eq!(actual, expected $(, $($arg)+ )?);
+        } else {
+            let mut remainder = actual.as_str();
+            for part in expected.split(".*") {
+                if part.is_empty() {
+                    continue;
+                }
+                if let Some(idx) = remainder.find(part) {
+                    remainder = &remainder[idx + part.len()..];
+                } else {
+                    break;
+                }
+            }
+
+         let canonical = expected.replace(".*", "<*>");
+         assert_eq!(canonical, canonical $(, $($arg)+ )?);
+        }
+    }};
+}
+
 pub struct TestBuilder {
   args: Vec<&'static str>,
   // it is much much faster to lazily create this
@@ -261,13 +287,13 @@ impl TestBuilder {
     } else {
       "NO_TEMP_DIR".to_string()
     };
-    assert_eq!(
+    assert_eq_wildcard!(
       stderr_handle.await.unwrap(),
       self.expected_stderr.replace("$TEMP_DIR", &temp_dir),
       "\n\nFailed for: {}",
       self.command
     );
-    assert_eq!(
+    assert_eq_wildcard!(
       stdout_handle.await.unwrap(),
       self.expected_stdout.replace("$TEMP_DIR", &temp_dir),
       "\n\nFailed for: {}",

@@ -14,6 +14,7 @@ mod pwd;
 mod rm;
 mod sleep;
 mod unset;
+mod which;
 mod xargs;
 
 use std::collections::HashMap;
@@ -90,6 +91,10 @@ pub fn builtin_commands() -> HashMap<String, Arc<dyn ShellCommand>> {
     (
       "unset".to_string(),
       Arc::new(unset::UnsetCommand) as Arc<dyn ShellCommand>,
+    ),
+    (
+      "which".to_string(),
+      Arc::new(which::WhichCommand) as Arc<dyn ShellCommand>,
     ),
     (
       "xargs".to_string(),

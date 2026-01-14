@@ -1198,6 +1198,77 @@ async fn unset() {
 }
 
 #[tokio::test]
+async fn which() {
+  TestBuilder::new()
+    .command("which echo")
+    .assert_stdout("/usr/bin/echo\n")
+    .run()
+    .await;
+
+  TestBuilder::new()
+    .command("which non_existent_command")
+    .assert_stdout("")
+    .assert_stderr("which: no non_existent_command in .*")
+    .assert_exit_code(1)
+    .run()
+    .await;
+
+  // Multiple commands - one found, one not
+  TestBuilder::new()
+    .command("which echo nonexistent_command_12345")
+    .assert_stdout("/usr/bin/echo\n")
+    .assert_stderr("which: no nonexistent_command_12345 in .*")
+    .assert_exit_code(1)
+    .run()
+    .await;
+
+  // Multiple commands - all found
+  TestBuilder::new()
+    .command("which echo ls")
+    .assert_stdout("/usr/bin/echo\n/usr/bin/ls\n")
+    .assert_exit_code(0)
+    .run()
+    .await;
+
+  // --all flag - find all instances in PATH
+  TestBuilder::new()
+    .directory("custom_bin")
+    .file("custom_bin/echo", "#!/bin/sh\necho custom")
+    .env_var(
+      "PATH",
+      &format!("./custom_bin:{}", std::env::var("PATH").unwrap()),
+    )
+    .command("chmod +x ./custom_bin/echo && which --all echo")
+    .assert_stdout("./custom_bin/echo\n/usr/bin/echo\n")
+    .run()
+    .await;
+
+  // --all flag with command not found
+  TestBuilder::new()
+    .command("which --all nonexistent_command_12345")
+    .assert_stdout("")
+    .assert_exit_code(1)
+    .run()
+    .await;
+
+  // Exit code equals number of failed commands
+  TestBuilder::new()
+    .command("which echo nonexistent_1 ls nonexistent_2")
+    .assert_stdout("/usr/bin/echo\n/usr/bin/ls\n")
+    .assert_stderr("which: no nonexistent_1 in (.*)\nwhich: no nonexistent_2 in (.*)")
+    .assert_exit_code(2)
+    .run()
+    .await;
+
+  // Exit code -1 when no arguments provided
+  TestBuilder::new()
+    .command("which")
+    .assert_exit_code(-1)
+    .run()
+    .await;
+}
+
+#[tokio::test]
 async fn xargs() {
   TestBuilder::new()
     .command("echo '1   2   3  ' | xargs")

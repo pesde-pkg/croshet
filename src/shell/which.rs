@@ -127,11 +127,11 @@ impl which::sys::Sys for ShellState {
   }
 
   fn metadata(&self, path: &Path) -> std::io::Result<Self::Metadata> {
-    std::fs::metadata(path)
+    std::fs::metadata(self.cwd().join(path))
   }
 
   fn symlink_metadata(&self, path: &Path) -> std::io::Result<Self::Metadata> {
-    std::fs::symlink_metadata(path)
+    std::fs::symlink_metadata(self.cwd().join(path))
   }
 
   fn read_dir(
@@ -140,7 +140,7 @@ impl which::sys::Sys for ShellState {
   ) -> std::io::Result<
     Box<dyn Iterator<Item = std::io::Result<Self::ReadDirEntry>>>,
   > {
-    let iter = std::fs::read_dir(path)?;
+    let iter = std::fs::read_dir(self.cwd().join(path))?;
     Ok(Box::new(iter))
   }
 
@@ -152,7 +152,7 @@ impl which::sys::Sys for ShellState {
     use nix::unistd::AccessFlags;
     use nix::unistd::access;
 
-    match access(path, AccessFlags::X_OK) {
+    match access(&self.cwd().join(path), AccessFlags::X_OK) {
       Ok(()) => Ok(true),
       Err(nix::errno::Errno::ENOENT) => Ok(false),
       Err(e) => Err(std::io::Error::from_raw_os_error(e as i32)),
@@ -166,7 +166,9 @@ impl which::sys::Sys for ShellState {
   ) -> std::io::Result<bool> {
     use std::os::windows::ffi::OsStrExt;
 
-    let name = path
+    let name = self
+      .cwd()
+      .join(path)
       .as_os_str()
       .encode_wide()
       .chain(Some(0))
