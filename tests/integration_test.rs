@@ -1255,7 +1255,9 @@ async fn which() {
   TestBuilder::new()
     .command("which echo nonexistent_1 ls nonexistent_2")
     .assert_stdout("/usr/bin/echo\n/usr/bin/ls\n")
-    .assert_stderr("which: no nonexistent_1 in (.*)\nwhich: no nonexistent_2 in (.*)")
+    .assert_stderr(
+      "which: no nonexistent_1 in (.*)\nwhich: no nonexistent_2 in (.*)",
+    )
     .assert_exit_code(2)
     .run()
     .await;

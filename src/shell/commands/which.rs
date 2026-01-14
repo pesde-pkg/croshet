@@ -23,36 +23,36 @@ impl ShellCommand for WhichCommand {
       return ExecuteResult::from_exit_code(-1);
     }
 
-   let resolved = flags
-    .binaries
-    .iter()
-    .map(|binary| {
+    let resolved = flags
+      .binaries
+      .iter()
+      .map(|binary| {
         let query = WhichConfig::new_with_sys(&context.state)
-            .binary_name(binary.clone())
-            .custom_cwd(context.state.cwd().clone());
+          .binary_name(binary.clone())
+          .custom_cwd(context.state.cwd().clone());
 
         let result = if flags.all {
-            query.all_results().map(|it| it.collect())
+          query.all_results().map(|it| it.collect())
         } else {
-            query.first_result().map(|p| vec![p])
+          query.first_result().map(|p| vec![p])
         };
 
         result
-            .inspect_err(|_| {
-                let _ = context.stderr.write_line(&format!(
-                    "which: no {} in ({})",
-                    binary.to_string_lossy(),
-                    context
-                        .state
-                        .env_path()
-                        .unwrap_or_default()
-                        .to_string_lossy(),
-                ));
-            })
-            .unwrap_or_default()
-    })
-    .filter(|paths| !paths.is_empty())
-    .collect::<Vec<Vec<PathBuf>>>();
+          .inspect_err(|_| {
+            let _ = context.stderr.write_line(&format!(
+              "which: no {} in ({})",
+              binary.to_string_lossy(),
+              context
+                .state
+                .env_path()
+                .unwrap_or_default()
+                .to_string_lossy(),
+            ));
+          })
+          .unwrap_or_default()
+      })
+      .filter(|paths| !paths.is_empty())
+      .collect::<Vec<Vec<PathBuf>>>();
 
     let _ = context.stdout.write_all_iter(
       resolved
